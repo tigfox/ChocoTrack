@@ -15,6 +15,8 @@ A Shopify app that assembles "sampler kits" from mini chocolate bar inventory, u
 | Locations | Multi-location. Every run happens at a chosen location. |
 | Component picker | Search by title, SKU or barcode (scanner-style Enter to add), with a collection filter (defaults to the mini-bar collection). |
 | Records | Shopify only: no app-side business tables. Adjustment `reason` and `referenceDocumentUri` form the audit trail in Shopify's inventory history. |
+| Pick list | A printable pick list is available before any change is saved: what to pull from stock, how many of each, from which location. Printing never changes inventory. |
+| Box image | The assemble screen shows an image of the finished box, composed from the Shopify product images of the chosen mini bars. |
 | Surface | Embedded admin UI only. No storefront, POS or order webhooks in v1. |
 | Stack | Shopify CLI React Router template (TypeScript, Polaris, App Bridge). Prisma only for OAuth session storage. |
 | Distribution | Built for one store; no hardcoded shop so it can go public later. |
@@ -88,6 +90,26 @@ A repository-style wrapper around the GraphQL calls (locations, variant search, 
 
 Wire the approved mockup screens to the service layer: location, kit pick/create, mix picker, live max buildable, submit with success or error banner.
 
+### Phase 4b - Printable pick list (before saving)
+
+A **Print pick list** action next to Assemble (and Break down) that opens a print-ready sheet without changing inventory, so the team can pull stock first and submit afterwards.
+
+- Contents: date, location, kit (title, SKU), number of kits, and a table of components with SKU, barcode, quantity per kit, **total to pick** (per-kit x kits) and quantity available at the location, plus a tick box per line and a total-units row. Shortage lines are flagged. For disassembly the sheet lists what is returned to stock.
+- Built as a plain HTML view with a print stylesheet (`@media print`) and `window.print()`; hide the app chrome when printing. Works from any valid or in-progress mix, so it can be printed before the Assemble button is enabled.
+- Pure function in the domain layer builds the pick-list rows (unit tested); a Playwright test checks the print view contents.
+- Optional later: a barcode for the kit SKU, and a "pick list printed" note in the adjustment `reason`.
+
+### Phase 4c - Completed-box image
+
+Show what the finished kit will look like, built from the product images of the chosen mini bars.
+
+- Data: read each component's image from Shopify (variant image, falling back to the product's featured image) in the same query as the variant search; mini bars that are unpublished still return images through the Admin API.
+- Layout: a grid with one slot per bar in the kit (6-pack: 2 x 3, 12-pack: 3 x 4). Each chosen flavor fills as many slots as its quantity, in a stable order; unfilled slots show a placeholder until the mix reaches the kit size. A label under each slot shows the flavor name.
+- Fallbacks: a neutral placeholder tile for products with no image; lazy-load images and size them with Shopify's CDN image transforms.
+- Reuse: the same composition appears on the pick list so the packer can match the box visually.
+- Pure function maps a mix to an ordered list of slots (unit tested); the rendering is covered by Playwright.
+- Later option: save the composed image as media on the kit product through the Admin API.
+
 ### Phase 5 - Disassemble UI
 
 Location, kit and quantity, then the per-kit mini bar mix (multiplied by the kit count) with total validation.
@@ -114,6 +136,8 @@ Public-app work (billing, GDPR webhooks, app review), lots and expiry, cost roll
 
 ## Open questions for the store team
 
+- Pick list: should printing be optional, or required before the Assemble button works? Any fields the packers need (bin or shelf, lot, signature line)?
+- Box image: do the mini-bar products already have good product images in Shopify? Is there a packaging or box photo to use as the background, and should the composed image ever be saved onto the kit product?
 - Is one identical mix per run enough, or do they need different mixes per kit in a single run?
 - Is there a usual assembly location, or should the location be chosen every time?
 - Which option (AWS, GCP, DigitalOcean App Platform or Droplet), and who owns the account and deploys?
