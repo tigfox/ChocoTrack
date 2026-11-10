@@ -7,7 +7,7 @@ A Shopify app that assembles "sampler kits" from mini chocolate bar inventory, u
 | Area | Decision |
 |---|---|
 | Kit model | Assembled/physical kits. Assembly consumes components and adds stock to the kit's InventoryItem. |
-| Kit sizes | Four variants: **4-pack** (1x4 box), **5-pack** (1x5; layout assumed, to confirm), **6-pack** (1x6) and **12-pack** (2x6). Mini bars per kit must equal the kit size exactly. |
+| Kit sizes | Four variants: **4-pack** (1x4 box), **5-pack** (1x5), **6-pack** (1x6) and **12-pack** (2x6). Mini bars per kit must equal the kit size exactly. |
 | Components | About 20 flavors of mini chocolate bar (the mockup uses 23 names taken from the River Sea Chocolates bar collection). Tracked in inventory, not sold individually. Any combination may go in a kit. |
 | Recipe | None stored. Components and quantities are chosen at each assembly run (the same mix is built N times per run). |
 | Kit SKU | An ordinary tracked variant. The app can create it or link an existing variant. |
