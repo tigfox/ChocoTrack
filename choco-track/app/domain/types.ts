@@ -37,6 +37,7 @@ export interface InventoryChange {
 export type IssueCode =
   | 'NO_LOCATION'
   | 'NO_KIT'
+  | 'KIT_AS_COMPONENT'
   | 'BAD_KIT_COUNT'
   | 'NO_UNITS'
   | 'WRONG_UNIT_TOTAL'

@@ -144,3 +144,13 @@ export const ensureStocked = async (
     stock,
   );
 };
+
+/**
+ * The quantity each line is guarded with: what the user saw, falling back to the live level
+ * (for example a level that was activated just now).
+ */
+export const guardStock = (seen: StockMap, live: StockMap, changes: readonly InventoryChange[]): StockMap =>
+  changes.reduce<StockMap>((acc, { variantId, locationId }) => {
+    const quantity = seen[variantId]?.[locationId] ?? live[variantId]?.[locationId];
+    return quantity === undefined ? acc : { ...acc, [variantId]: { ...acc[variantId], [locationId]: quantity } };
+  }, {});

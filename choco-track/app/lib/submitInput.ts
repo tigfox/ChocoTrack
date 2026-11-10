@@ -15,7 +15,9 @@ export type ParseResult = { readonly ok: true; readonly value: SubmitInput } | {
 
 const MAX_KITS = 10_000;
 const MAX_PER_KIT = 100;
-const MAX_VARIANTS = 500;
+/** A kit holds at most 12 bars, so a mix has at most 12 distinct flavors; allow headroom for invalid input to be reported. */
+const MAX_MIX_VARIANTS = 50;
+const MAX_STOCK_VARIANTS = MAX_MIX_VARIANTS + 1;
 const GID = /^gid:\/\/shopify\/[A-Za-z]+\/\d+$/;
 const RUN_ID = /^[A-Za-z0-9-]{8,64}$/;
 
@@ -28,7 +30,7 @@ const fail = (error: string): ParseResult => ({ ok: false, error });
 const parsePerKit = (raw: unknown): UnitCounts | undefined => {
   if (!isRecord(raw)) return undefined;
   const entries = Object.entries(raw);
-  if (entries.length === 0 || entries.length > MAX_VARIANTS) return undefined;
+  if (entries.length === 0 || entries.length > MAX_MIX_VARIANTS) return undefined;
   return entries.every(([id, n]) => isGid(id, 'ProductVariant') && isCount(n, 1, MAX_PER_KIT))
     ? (raw as UnitCounts)
     : undefined;
@@ -37,7 +39,7 @@ const parsePerKit = (raw: unknown): UnitCounts | undefined => {
 const parseSeenStock = (raw: unknown): StockMap | undefined => {
   if (!isRecord(raw)) return undefined;
   const variants = Object.entries(raw);
-  if (variants.length > MAX_VARIANTS) return undefined;
+  if (variants.length > MAX_STOCK_VARIANTS) return undefined;
   const valid = variants.every(
     ([id, levels]) =>
       isGid(id, 'ProductVariant') &&

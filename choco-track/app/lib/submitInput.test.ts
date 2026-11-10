@@ -52,9 +52,9 @@ describe('parseSubmitInput', () => {
     expect(parseSubmitInput({ ...valid(), ...patch }).ok).toBe(false);
   });
   it('rejects oversized snapshots', () => {
-    const many = Object.fromEntries(Array.from({ length: 501 }, (_, i) => [`gid://shopify/ProductVariant/${i + 10}`, 1]));
+    const many = Object.fromEntries(Array.from({ length: 51 }, (_, i) => [`gid://shopify/ProductVariant/${i + 10}`, 1]));
     expect(parseSubmitInput({ ...valid(), perKit: many }).ok).toBe(false);
-    const stock = Object.fromEntries(Array.from({ length: 501 }, (_, i) => [`gid://shopify/ProductVariant/${i + 10}`, {}]));
+    const stock = Object.fromEntries(Array.from({ length: 52 }, (_, i) => [`gid://shopify/ProductVariant/${i + 10}`, {}]));
     expect(parseSubmitInput({ ...valid(), seenStock: stock }).ok).toBe(false);
   });
 });

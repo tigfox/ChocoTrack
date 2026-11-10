@@ -132,6 +132,14 @@ Location, kit and quantity, then the per-kit mini bar mix (multiplied by the kit
 
 Playwright E2E tests on the dev store, security review, error and empty states, README.
 
+*Done so far:* independent security review (no critical or high findings) and the fixes it raised: a request whose "kit" is not a real kit, or lists the kit as its own component, is refused; activation of stock levels is decided from live Shopify data (the browser snapshot is only the stale-stock guard); duplicate-SKU check when creating a kit; request body capped at 64 KB and mix size limited; search operators stripped; error logging reduced to name and message; `.dockerignore` extended; dev MCP pinned. Also: "Show more" search paging (up to 250), empty states, mandatory privacy webhooks (take effect on `shopify app deploy`), Dependabot config, root README. The live test now runs through the real server handler, including a stale-snapshot refusal.
+
+*Still open:*
+- Browser (Playwright) tests against the embedded app: they need a logged-in Shopify admin session, so they are manual for now (see the check list in the README).
+- Run the container as a non-root user when the database moves to PostgreSQL (Phase 7); today's SQLite file needs write access.
+- Per-shop rate limiting, if the app goes public.
+- Confirm `application_url`, redirect URLs and webhook `api_version` (`2027-01` from the template) at deploy.
+
 ### Phase 7 - Deploy
 
 Once the host is chosen: infrastructure as code for the selected provider (a Compose file and bootstrap script for a Droplet), a CI/CD pipeline, a staging deploy against the dev store, then production. Update the Shopify app URLs and webhooks to the hosted domain.

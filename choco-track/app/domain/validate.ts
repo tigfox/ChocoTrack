@@ -31,6 +31,12 @@ const baseIssues = ({ locationId, kit, kitCount }: Common): ValidationIssue[] =>
     : [issue('BAD_KIT_COUNT', 'Number of kits must be a whole number of at least 1.')]),
 ];
 
+/** A forged request must not use an ordinary product as a kit, or a kit as its own component. */
+const kitIntegrityIssues = ({ kit, perKit }: Common & { perKit: UnitCounts }): ValidationIssue[] => [
+  ...(kit && kit.kitSize === undefined ? [issue('NO_KIT', 'That item is not a kit.', kit.id)] : []),
+  ...(kit && (perKit[kit.id] ?? 0) > 0 ? [issue('KIT_AS_COMPONENT', 'A kit cannot be one of its own mini bars.', kit.id)] : []),
+];
+
 const quantityIssues = (counts: UnitCounts, byId: Common['variantsById']): ValidationIssue[] =>
   Object.entries(counts)
     .filter(([, n]) => !Number.isInteger(n) || n < 0)
@@ -63,7 +69,7 @@ export const validateAssembly = (input: AssemblyInput): readonly ValidationIssue
           : [];
       })
     : [];
-  return [...base, ...quantity, ...total, ...stockIssues];
+  return [...base, ...kitIntegrityIssues(input), ...quantity, ...total, ...stockIssues];
 };
 
 export const validateDisassembly = (input: DisassemblyInput): readonly ValidationIssue[] => {
@@ -82,5 +88,5 @@ export const validateDisassembly = (input: DisassemblyInput): readonly Validatio
         .filter(([id]) => availableAt(stock, id, locationId) === null)
         .map(([id]) => notStocked(input, id))
     : [];
-  return [...base, ...quantity, ...total, ...kitStock, ...stockIssues];
+  return [...base, ...kitIntegrityIssues(input), ...quantity, ...total, ...kitStock, ...stockIssues];
 };

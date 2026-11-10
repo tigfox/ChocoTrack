@@ -87,3 +87,19 @@ describe('validateDisassembly', () => {
     expect(codes(issues)).toContain('NOT_STOCKED');
   });
 });
+
+describe.each([
+  ['assembly', validateAssembly],
+  ['disassembly', validateDisassembly],
+])('%s kit integrity (forged requests)', (_name, validate) => {
+  const ok = { ...base, kit: kit6, kitCount: 1, perKit: { [dark.id]: 6 } };
+
+  it('refuses a variant that is not a kit (no kit size)', () => {
+    const result = validate({ ...ok, kit: dark, perKit: { [milk.id]: 100 } });
+    expect(codes(result)).toContain('NO_KIT');
+    expect(result.find((i) => i.code === 'NO_KIT')?.message).toBe('That item is not a kit.');
+  });
+  it('refuses a kit listed as its own component', () => {
+    expect(codes(validate({ ...ok, perKit: { [dark.id]: 5, [kit6.id]: 1 } }))).toContain('KIT_AS_COMPONENT');
+  });
+});

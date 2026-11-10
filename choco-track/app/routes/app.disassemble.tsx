@@ -3,6 +3,7 @@ import { useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { KitRunView } from "../components/KitRunView";
 import { handleRun } from "../lib/handleRun";
+import { readJsonBody } from "../lib/readJsonBody";
 import { fromAdmin } from "../shopify/client";
 import { loadWorkspace } from "../shopify/workspace";
 import { authenticate } from "../shopify.server";
@@ -14,7 +15,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { admin } = await authenticate.admin(request);
-  return handleRun(fromAdmin(admin), await request.json().catch(() => null), "disassemble");
+  return handleRun(fromAdmin(admin), await readJsonBody(request), "disassemble");
 };
 
 export default function Disassemble() {

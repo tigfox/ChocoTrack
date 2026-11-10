@@ -48,6 +48,7 @@ describe("handleRun", () => {
   it("assembles with variants read from Shopify and returns fresh stock", async () => {
     const client = fakeClient(
       { nodes: [variantNode(KIT, "SMP-4", "4"), variantNode(A, "MINI-A", null)] },
+      { nodes: [stockNode(KIT, 0), stockNode(A, 10)] },
       adjusted,
       { nodes: [stockNode(KIT, 1), stockNode(A, 6)] },
     );
@@ -60,6 +61,7 @@ describe("handleRun", () => {
     const seenStock = { [A]: { [L]: 10 }, [KIT]: { [L]: 3 } };
     const client = fakeClient(
       { nodes: [variantNode(KIT, "SMP-4", "4"), variantNode(A, "MINI-A", null)] },
+      { nodes: [stockNode(KIT, 0), stockNode(A, 10)] },
       adjusted,
       { nodes: [stockNode(KIT, 2), stockNode(A, 14)] },
     );
@@ -69,15 +71,18 @@ describe("handleRun", () => {
   });
 
   it("returns a validation failure without changing anything", async () => {
-    const client = fakeClient({ nodes: [variantNode(KIT, "SMP-4", "4"), variantNode(A, "MINI-A", null)] });
+    const client = fakeClient(
+      { nodes: [variantNode(KIT, "SMP-4", "4"), variantNode(A, "MINI-A", null)] },
+      { nodes: [stockNode(KIT, 0), stockNode(A, 10)] },
+    );
     const r = await handleRun(client, body({ perKit: { [A]: 3 } }), "assemble");
     expect(r.result).toMatchObject({ ok: false, kind: "validation" });
     expect(r.stock).toBeUndefined();
-    expect(client.calls).toHaveLength(1);
+    expect(client.calls).toHaveLength(2);
   });
 
   it("reports a missing kit as a validation failure", async () => {
-    const client = fakeClient({ nodes: [variantNode(A, "MINI-A", null)] });
+    const client = fakeClient({ nodes: [variantNode(A, "MINI-A", null)] }, { nodes: [stockNode(A, 10)] });
     const r = await handleRun(client, body(), "assemble");
     expect(r.result).toMatchObject({ ok: false, kind: "validation" });
   });
@@ -87,11 +92,39 @@ describe("handleRun", () => {
     const stale = { inventoryAdjustQuantities: { inventoryAdjustmentGroup: null, userErrors: [{ message: "s", code: "CHANGE_FROM_QUANTITY_STALE" }] } };
     const client = fakeClient(
       { nodes: [variantNode(KIT, "SMP-4", "4"), variantNode(A, "MINI-A", null)] },
+      { nodes: [stockNode(KIT, 0), stockNode(A, 10)] },
       stale,
       { nodes: [stockNode(A, 2), stockNode(KIT, 0)] },
     );
     const r = await handleRun(client, body(), "assemble");
     expect(r.result).toMatchObject({ ok: false, kind: "conflict" });
     expect(r.stock?.[A]).toEqual({ [L]: 2 });
+  });
+
+  it("refuses an ordinary product posted as the kit", async () => {
+    const client = fakeClient(
+      { nodes: [variantNode(KIT, "MINI-X", null), variantNode(A, "MINI-A", null)] },
+      { nodes: [stockNode(KIT, 9), stockNode(A, 50)] },
+    );
+    const r = await handleRun(client, body({ perKit: { [A]: 40 }, seenStock: { [A]: { [L]: 50 }, [KIT]: { [L]: 9 } } }), "assemble");
+    expect(r.result).toMatchObject({ ok: false, kind: "validation" });
+    expect(client.calls).toHaveLength(2);
+  });
+
+  it("activates from live stock, not from a forged snapshot that hides a level", async () => {
+    // The browser claims the kit has no level here; Shopify says it does (4), so nothing is activated
+    // and the guard falls back to the live quantity.
+    const seenStock = { [A]: { [L]: 10 } };
+    const client = fakeClient(
+      { nodes: [variantNode(KIT, "SMP-4", "4"), variantNode(A, "MINI-A", null)] },
+      { nodes: [stockNode(KIT, 4), stockNode(A, 10)] },
+      adjusted,
+      { nodes: [stockNode(KIT, 5), stockNode(A, 6)] },
+    );
+    const r = await handleRun(client, body({ seenStock }), "assemble");
+    expect(r.result).toMatchObject({ ok: true });
+    expect(client.calls.some((c) => c.query.includes("inventoryActivate"))).toBe(false);
+    const sent = (client.calls[2]?.variables as { input: { changes: { changeFromQuantity: number }[] } }).input.changes;
+    expect(sent.map((c) => c.changeFromQuantity)).toEqual([10, 4]);
   });
 });

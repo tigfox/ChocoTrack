@@ -1,6 +1,6 @@
 import { fakeClient } from './fakeClient';
 import { ShopifyUserErrors } from './errors';
-import { activateInventory, adjustInventory, ensureStocked, loadStock, NotStockedError } from './inventory';
+import { activateInventory, adjustInventory, ensureStocked, guardStock, loadStock, NotStockedError } from './inventory';
 
 const level = (location: string, quantity: number) => ({ location: { id: location }, quantities: [{ quantity }] });
 const stockNode = (id: string, ...levels: ReturnType<typeof level>[]) => ({ id, inventoryItem: { inventoryLevels: { nodes: levels } } });
@@ -100,5 +100,18 @@ describe('ensureStocked', () => {
   });
   it('rejects a missing inventory item id', async () => {
     await expect(ensureStocked(fakeClient(), request.changes, {}, {})).rejects.toThrow(NotStockedError);
+  });
+});
+
+describe('guardStock', () => {
+  const changes = [
+    { variantId: 'v1', locationId: 'L1', delta: -1 },
+    { variantId: 'kit', locationId: 'L1', delta: 1 },
+    { variantId: 'v2', locationId: 'L1', delta: -1 },
+  ];
+  it('prefers what the user saw, falls back to live, and omits unknown levels', () => {
+    const seen = { v1: { L1: 20 } };
+    const live = { v1: { L1: 99 }, kit: { L1: 0 } };
+    expect(guardStock(seen, live, changes)).toEqual({ v1: { L1: 20 }, kit: { L1: 0 } });
   });
 });

@@ -3,8 +3,9 @@ import type { InventoryChange, StockMap, UnitCounts, ValidationIssue } from '../
 import { validateAssembly, validateDisassembly } from '../domain/validate';
 import type { CatalogVariant } from './catalog';
 import type { GraphqlClient } from './client';
+import { logError } from '../lib/logError';
 import { friendlyMessage, ShopifyUserErrors } from './errors';
-import { adjustInventory, ensureStocked, loadStock } from './inventory';
+import { adjustInventory, ensureStocked, guardStock, loadStock } from './inventory';
 
 export type SubmitResult =
   | { readonly ok: true; readonly adjustmentId: string; readonly changes: readonly InventoryChange[] }
@@ -20,8 +21,10 @@ export interface SubmitRequest {
   readonly locationId: string;
   /** Every variant that can appear in the request (kit and components). */
   readonly variants: readonly CatalogVariant[];
-  /** Stock the user saw while building the mix. */
+  /** Stock the user saw while building the mix: validation and the compare-and-swap guard. */
   readonly stock: StockMap;
+  /** Stock read from Shopify at submit time: decides which levels need activating. Defaults to `stock`. */
+  readonly liveStock?: StockMap;
   /** Reused on retry so a double-submit cannot apply twice; omit to generate one. */
   readonly runId?: string;
 }
@@ -41,18 +44,18 @@ export const submitRun = async (client: GraphqlClient, req: SubmitRequest): Prom
   const runId = req.runId ?? crypto.randomUUID();
 
   try {
-    const stock = await ensureStocked(client, changes, inventoryItemIds, req.stock);
+    const live = await ensureStocked(client, changes, inventoryItemIds, req.liveStock ?? req.stock);
     const adjustmentId = await adjustInventory(client, {
       changes,
       inventoryItemIds,
-      stock,
+      stock: guardStock(req.stock, live, changes),
       reason: REASON,
       referenceDocumentUri: `gid://choco-track/${req.mode === 'assemble' ? 'Assembly' : 'Disassembly'}/${runId}`,
       idempotencyKey: runId,
     });
     return { ok: true, adjustmentId, changes };
   } catch (err) {
-    console.error('submitRun failed', { mode: req.mode, runId, err });
+    logError('submitRun failed', err, { mode: req.mode, runId });
     if (err instanceof ShopifyUserErrors && err.isStale) {
       const fresh = await loadStock(client, changes.map((c) => c.variantId));
       return { ok: false, kind: 'conflict', message: friendlyMessage(err), stock: { ...req.stock, ...fresh } };

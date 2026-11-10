@@ -84,4 +84,18 @@ describe('submitRun', () => {
     await submitRun(client, base({ runId: undefined }));
     expect(String(client.calls[0]?.variables?.key)).toMatch(/^[0-9a-f-]{36}$/);
   });
+  it('activates from live stock when the browser snapshot is missing a level that does not exist', async () => {
+    const client = fakeClient({ inventoryActivate: { userErrors: [] } }, ok);
+    const stock = { a: { L1: 20 }, b: { L1: 20 } };
+    const result = await submitRun(client, base({ stock, liveStock: stock }));
+    expect(result.ok).toBe(true);
+    expect(client.calls[0]?.variables).toEqual({ inventoryItemId: 'item-kit', locationId: 'L1' });
+  });
+  it('does not activate a level that exists live even if the snapshot omits it', async () => {
+    const client = fakeClient(ok);
+    const result = await submitRun(client, base({ stock: { a: { L1: 20 }, b: { L1: 20 } }, liveStock: { a: { L1: 20 }, b: { L1: 20 }, kit: { L1: 3 } } }));
+    expect(result.ok).toBe(true);
+    expect(client.calls).toHaveLength(1);
+    expect(adjustInput(client.calls[0]).changes).toContainEqual({ inventoryItemId: 'item-kit', locationId: 'L1', delta: 2, changeFromQuantity: 3 });
+  });
 });

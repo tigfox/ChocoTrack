@@ -57,7 +57,11 @@ describe('buildSearchQuery', () => {
     expect(buildSearchQuery('rum', 'gid://shopify/Collection/42')).toBe('collection:42 AND rum');
   });
   it('strips search operators from user input', () => {
-    expect(buildSearchQuery('a" OR (sku:*)')).toBe('a OR sku');
+    expect(buildSearchQuery('a" OR (sku:*)')).toBe('a sku');
+  });
+  it('drops boolean keywords and negation', () => {
+    expect(buildSearchQuery('rum NOT caramel -dark and')).toBe('rum caramel dark');
+    expect(buildSearchQuery('OR AND')).toBeNull();
   });
   it('keeps scanned barcodes and SKUs intact', () => {
     expect(buildSearchQuery('MINI-RUM_1')).toBe('MINI-RUM_1');

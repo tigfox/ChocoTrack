@@ -1,7 +1,11 @@
 import type { KitSize } from '../domain/types';
 import { KIT_SIZE_METAFIELD, KIT_TAG, toCatalogVariant, type CatalogVariant, type VariantNode } from './catalog';
 import type { GraphqlClient } from './client';
-import { assertNoUserErrors, ShopifyApiError, type UserError } from './errors';
+import { assertNoUserErrors, ShopifyApiError, ShopifyUserErrors, type UserError } from './errors';
+
+const SKU_QUERY = `#graphql
+  query SkuTaken($query: String!) { productVariants(first: 5, query: $query) { nodes { sku } } }
+`;
 
 const CREATE_KIT_MUTATION = `#graphql
   mutation CreateKit($input: ProductSetInput!) {
@@ -34,8 +38,15 @@ interface CreateKitData {
   };
 }
 
+const skuTaken = async (client: GraphqlClient, sku: string): Promise<boolean> => {
+  const query = `sku:"${sku.replace(/["\\]/g, '')}"`;
+  const data = await client<{ productVariants: { nodes: ReadonlyArray<{ sku: string | null }> } }>(SKU_QUERY, { query });
+  return data.productVariants.nodes.some((v) => v.sku?.toLowerCase() === sku.toLowerCase());
+};
+
 /** A tracked, tagged product with one variant. Stock is added by the first assembly. */
 export const createKit = async (client: GraphqlClient, kit: NewKit): Promise<CatalogVariant> => {
+  if (await skuTaken(client, kit.sku)) throw new ShopifyUserErrors('Create kit', [{ message: 'That SKU is already in use.' }]);
   const input = {
     title: kit.title,
     status: 'ACTIVE',

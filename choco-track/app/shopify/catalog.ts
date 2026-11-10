@@ -80,7 +80,15 @@ export const toCatalogVariant = (node: VariantNode): CatalogVariant => {
 };
 
 /** Shopify search syntax treats these as operators; users type names, SKUs and scanned barcodes. */
-const sanitize = (text: string): string => text.replace(/[^\p{L}\p{N}\s%.\-_]/gu, ' ').replace(/\s+/g, ' ').trim();
+const OPERATORS = /^(and|or|not)$/i;
+
+const sanitize = (text: string): string =>
+  text
+    .replace(/[^\p{L}\p{N}\s%.\-_]/gu, ' ')
+    .split(/\s+/)
+    .map((token) => token.replace(/^-+/, ''))
+    .filter((token) => token !== '' && !OPERATORS.test(token))
+    .join(' ');
 
 const numericId = (gid: string): string => gid.slice(gid.lastIndexOf('/') + 1);
 

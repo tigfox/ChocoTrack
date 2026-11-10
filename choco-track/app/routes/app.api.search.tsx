@@ -1,4 +1,5 @@
 import type { LoaderFunctionArgs } from "react-router";
+import { logError } from "../lib/logError";
 import { parseSearchParams } from "../lib/searchParams";
 import { fromAdmin } from "../shopify/client";
 import { friendlyMessage } from "../shopify/errors";
@@ -13,7 +14,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const result = await searchWithStock(fromAdmin(admin), options);
     return { ok: true as const, ...result, limit: options.first };
   } catch (err) {
-    console.error("search failed", err);
+    logError("search failed", err);
     return { ok: false as const, message: friendlyMessage(err), variants: [], stock: {} };
   }
 };

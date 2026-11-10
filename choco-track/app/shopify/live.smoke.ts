@@ -5,8 +5,9 @@ import { listCollections, listKits, searchVariants } from './catalog';
 import type { GraphqlClient } from './client';
 import { ShopifyApiError } from './errors';
 import { loadStock } from './inventory';
+import type { StockMap } from '../domain/types';
 import { listLocations } from './locations';
-import { submitRun } from './submit';
+import { handleRun } from '../lib/handleRun';
 
 const store = process.env.LIVE_STORE;
 
@@ -43,20 +44,28 @@ describe.skipIf(!store)('live dev store', () => {
     const kit = kits.find((k) => k.sku === 'SMP-4');
     if (!warehouse || !kit) throw new Error('seed data missing');
     const perKit = Object.fromEntries(minis.map((m) => [m.id, 1]));
-    const variants = [kit, ...minis];
-    const ids = variants.map((v) => v.id);
-    const run = { kit, kitCount: 1, perKit, locationId: warehouse.id, variants };
+    const ids = [kit, ...minis].map((v) => v.id);
+    const run = (mode: 'assemble' | 'disassemble', seenStock: StockMap) =>
+      handleRun(
+        cliClient,
+        { mode, kitId: kit.id, kitCount: 1, locationId: warehouse.id, perKit, seenStock, runId: crypto.randomUUID() },
+        mode,
+      );
 
     const before = await loadStock(cliClient, ids);
-    const assembled = await submitRun(cliClient, { ...run, mode: 'assemble', stock: before });
-    expect(assembled).toMatchObject({ ok: true });
+    const assembled = await run('assemble', before);
+    expect(assembled.result).toMatchObject({ ok: true });
 
     const mid = await loadStock(cliClient, ids);
     expect(mid[kit.id]?.[warehouse.id]).toBe((before[kit.id]?.[warehouse.id] ?? 0) + 1);
 
-    const disassembled = await submitRun(cliClient, { ...run, mode: 'disassemble', stock: mid });
-    expect(disassembled).toMatchObject({ ok: true });
-    expect(await loadStock(cliClient, ids)).toEqual(before);
+    // A second submit with the old snapshot must be refused as stale, changing nothing.
+    const stale = await run('assemble', before);
+    expect(stale.result).toMatchObject({ ok: false, kind: 'conflict' });
+    expect(await loadStock(cliClient, ids)).toEqual(mid);
 
+    const disassembled = await run('disassemble', mid);
+    expect(disassembled.result).toMatchObject({ ok: true });
+    expect(await loadStock(cliClient, ids)).toEqual(before);
   }, 180_000);
 });

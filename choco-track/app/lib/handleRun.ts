@@ -26,6 +26,7 @@ export const handleRun = async (
 
   // Kit sizes and inventory item ids come from Shopify, never from the browser.
   const variants = await getVariants(client, [kitId, ...Object.keys(perKit)]);
+  const liveStock = await loadStock(client, variants.map((v) => v.id));
   const result = await submitRun(client, {
     mode,
     kit: variants.find((v) => v.id === kitId),
@@ -34,6 +35,7 @@ export const handleRun = async (
     locationId,
     variants,
     stock: seenStock,
+    liveStock,
     runId,
   });
   if (result.ok) return { result, stock: await loadStock(client, variants.map((v) => v.id)) };
