@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFetcher } from "react-router";
 import { buildPickList } from "../domain/pickList";
-import { maxBuildable, sumUnits } from "../domain/stock";
+import { sumUnits } from "../domain/stock";
 import type { StockMap, UnitCounts } from "../domain/types";
-import { validateAssembly } from "../domain/validate";
 import { useVariantSearch } from "../hooks/useVariantSearch";
 import type { CatalogVariant } from "../shopify/catalog";
 import type { SubmitResult } from "../shopify/submit";
 import type { Workspace } from "../shopify/workspace";
+import type { RunResponse } from "../lib/handleRun";
 import { BoxPreview } from "./BoxPreview";
 import { CreateKitModal } from "./CreateKitModal";
 import { FlavorPicker } from "./FlavorPicker";
@@ -15,14 +15,11 @@ import { KitFields } from "./KitFields";
 import { MixSummary } from "./MixSummary";
 import { PickListSheet } from "./PickListSheet";
 import { ResultBanner } from "./ResultBanner";
+import { RUN_MODES, type RunMode } from "./runModes";
 
 interface Props {
   readonly workspace: Workspace;
-}
-
-interface SubmitResponse {
-  readonly result: SubmitResult;
-  readonly stock?: StockMap | undefined;
+  readonly mode: RunMode;
 }
 
 type KitResponse = { ok: true; kit: CatalogVariant } | { ok: false; message: string };
@@ -42,7 +39,8 @@ const mergeStock = (a: StockMap, b: StockMap): StockMap => {
   return merged;
 };
 
-export function AssembleView({ workspace }: Props) {
+export function KitRunView({ workspace, mode }: Props) {
+  const config = RUN_MODES[mode];
   const [locationId, setLocationId] = useState(workspace.locations[0]?.id ?? "");
   const [kits, setKits] = useState<readonly CatalogVariant[]>(workspace.kits);
   const [kitId, setKitId] = useState((workspace.kits.find((k) => k.kitSize === 6) ?? workspace.kits[0])?.id ?? "");
@@ -57,7 +55,7 @@ export function AssembleView({ workspace }: Props) {
   const runId = useRef(crypto.randomUUID());
 
   const search = useVariantSearch(query, collectionId);
-  const submitFetcher = useFetcher<SubmitResponse>();
+  const submitFetcher = useFetcher<RunResponse>();
   const kitFetcher = useFetcher<KitResponse>();
   const submitting = submitFetcher.state !== "idle";
 
@@ -72,21 +70,21 @@ export function AssembleView({ workspace }: Props) {
   const kitCount = Number(kitCountRaw);
   const validCount = Number.isInteger(kitCount) && kitCount >= 1;
   const locationName = workspace.locations.find((l) => l.id === locationId)?.name ?? "";
-  const issues = validateAssembly({ stock, variantsById: known, locationId, kit, kitCount, perKit });
-  const pickList = buildPickList({ stock, variantsById: known, mode: "assemble", kit, kitCount, perKit, locationId });
+  const issues = config.validate({ stock, variantsById: known, locationId, kit, kitCount, perKit });
+  const pickList = buildPickList({ stock, variantsById: known, mode, kit, kitCount, perKit, locationId });
   const allVariants = useMemo(() => Object.values(known), [known]);
 
   const submittedLabel = useRef("");
   const submittedLocation = useRef("");
 
   const submit = () => {
-    submittedLabel.current = `Assembled ${kitCount} x ${kit?.title ?? "kit"}`;
+    submittedLabel.current = config.doneLabel(kitCount, kit?.title ?? "kit");
     submittedLocation.current = locationName;
     const seenStock = Object.fromEntries(
       [kitId, ...Object.keys(perKit)].map((id) => [id, stock[id] ?? {}]),
     );
     submitFetcher.submit(
-      { mode: "assemble", kitId, kitCount, locationId, perKit, seenStock, runId: runId.current },
+      { mode, kitId, kitCount, locationId, perKit, seenStock, runId: runId.current },
       { method: "post", encType: "application/json" },
     );
   };
@@ -119,7 +117,7 @@ export function AssembleView({ workspace }: Props) {
   const closeModal = useCallback(() => setCreating(false), []);
 
   return (
-    <s-page heading="Assemble kits" inlineSize="large">
+    <s-page heading={config.pageHeading} inlineSize="large">
       <s-stack gap="base">
         {shown && (
           <ResultBanner {...shown} variantsById={known} onDismiss={() => setShown(undefined)} />
@@ -137,11 +135,11 @@ export function AssembleView({ workspace }: Props) {
               onKit={setKitId}
               kitCount={kitCountRaw}
               onKitCount={setKitCountRaw}
-              countLabel="Kits to assemble"
-              onCreateKit={() => setCreating(true)}
+              countLabel={config.countLabel}
+              {...(config.canCreateKit ? { onCreateKit: () => setCreating(true) } : {})}
             />
             <FlavorPicker
-              heading={`Choose the mini bars in each ${kit?.title ?? "kit"}`}
+              heading={config.pickerHeading(kit?.title ?? "kit")}
               variants={search.data?.variants ?? []}
               collections={workspace.collections}
               stock={stock}
@@ -154,7 +152,7 @@ export function AssembleView({ workspace }: Props) {
               onCollection={setCollectionId}
               loading={search.loading}
               error={search.error}
-              demandMultiplier={validCount ? kitCount : 1}
+              {...(config.flagShortages ? { demandMultiplier: validCount ? kitCount : 1 } : {})}
             />
           </s-stack>
           <s-stack gap="base">
@@ -164,14 +162,10 @@ export function AssembleView({ workspace }: Props) {
               units={sumUnits(perKit)}
               target={kit?.kitSize ?? 0}
               chosen={Object.entries(perKit).map(([id, n]) => [known[id]?.title ?? id, n] as const)}
-              extra={
-                <s-text color="subdued">
-                  {`Max buildable with this mix at ${locationName}: ${maxBuildable(stock, perKit, locationId)}`}
-                </s-text>
-              }
+              extra={<s-text color="subdued">{config.note({ stock, perKit, kitCount, locationId, locationName })}</s-text>}
               issues={issues}
               busy={submitting}
-              actionLabel={`Assemble ${validCount ? kitCount : ""} kit${kitCount === 1 ? "" : "s"}`.replace("  ", " ")}
+              actionLabel={config.actionLabel(kitCount)}
               onAction={submit}
               secondaryLabel="Print pick list"
               secondaryDisabled={!kit || pickList.rows.length === 0}
@@ -181,14 +175,16 @@ export function AssembleView({ workspace }: Props) {
           </s-stack>
         </s-grid>
         <PickListSheet list={pickList} locationName={locationName} perKit={perKit} variants={allVariants} />
-        <CreateKitModal
-          open={creating}
-          existing={allVariants}
-          busy={kitFetcher.state !== "idle"}
-          error={kitFetcher.data && !kitFetcher.data.ok ? kitFetcher.data.message : undefined}
-          onClose={closeModal}
-          onCreate={createKit}
-        />
+        {config.canCreateKit && (
+          <CreateKitModal
+            open={creating}
+            existing={allVariants}
+            busy={kitFetcher.state !== "idle"}
+            error={kitFetcher.data && !kitFetcher.data.ok ? kitFetcher.data.message : undefined}
+            onClose={closeModal}
+            onCreate={createKit}
+          />
+        )}
       </s-stack>
     </s-page>
   );

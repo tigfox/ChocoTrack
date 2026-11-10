@@ -126,6 +126,8 @@ Show what the finished kit will look like, built from the product images of the 
 
 Location, kit and quantity, then the per-kit mini bar mix (multiplied by the kit count) with total validation.
 
+*Built:* `/app/disassemble` reuses the assemble screen (`KitRunView`, mode-specific wording and rules in `runModes.ts`) and the same tested server handler (`handleRun`), which rejects a request posted to the wrong page. Awaiting a manual check in the dev store.
+
 ### Phase 6 - Hardening
 
 Playwright E2E tests on the dev store, security review, error and empty states, README.
