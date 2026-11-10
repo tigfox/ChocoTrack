@@ -30,6 +30,15 @@ test.describe('Box preview', () => {
     await expect(slots(page)).toHaveCount(4);
   });
 
+  test('a 5-pack is 1x5 and accepts exactly 5 bars', async ({ page }) => {
+    await field(page, 's-select', 'Kit').locator('select').selectOption('v-kit-smp-5');
+    await expect(preview(page).getByTestId('box-grid')).toHaveAttribute('data-layout', '1x5');
+    await expect(slots(page)).toHaveCount(5);
+    await add(page, BOLIVIA, 5);
+    await expect(page.getByTestId('unit-total')).toHaveText('5 / 5');
+    await expect(page.getByRole('button', { name: 'Assemble 1 kit' })).toBeEnabled();
+  });
+
   test('flavor images load (name-only mockup images)', async ({ page }) => {
     await add(page, BOLIVIA, 1);
     const loaded = await filledSlots(page).first().evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0);

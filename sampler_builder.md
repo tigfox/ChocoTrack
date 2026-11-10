@@ -7,7 +7,7 @@ A Shopify app that assembles "sampler kits" from mini chocolate bar inventory, u
 | Area | Decision |
 |---|---|
 | Kit model | Assembled/physical kits. Assembly consumes components and adds stock to the kit's InventoryItem. |
-| Kit sizes | Three variants: **4-pack** (1x4 box), **6-pack** (1x6) and **12-pack** (2x6). Mini bars per kit must equal the kit size exactly. |
+| Kit sizes | Four variants: **4-pack** (1x4 box), **5-pack** (1x5), **6-pack** (1x6) and **12-pack** (2x6). Mini bars per kit must equal the kit size exactly. |
 | Components | About 20 flavors of mini chocolate bar (the mockup uses 23 names taken from the River Sea Chocolates bar collection). Tracked in inventory, not sold individually. Any combination may go in a kit. |
 | Recipe | None stored. Components and quantities are chosen at each assembly run (the same mix is built N times per run). |
 | Kit SKU | An ordinary tracked variant. The app can create it or link an existing variant. |
@@ -104,7 +104,7 @@ A **Print pick list** action next to Assemble (and Break down) that opens a prin
 Show what the finished kit will look like, built from the product images of the chosen mini bars.
 
 - Data: the mini bars have product images in Shopify. Read each component's image from Shopify (variant image, falling back to the product's featured image) in the same query as the variant search; mini bars that are unpublished still return images through the Admin API.
-- Layout: a grid with one slot per bar in the kit, matching the physical boxes: 4-pack 1 x 4, 6-pack 1 x 6, 12-pack 2 x 6. Each chosen flavor fills as many slots as its quantity, in a stable order; unfilled slots show a placeholder until the mix reaches the kit size. 
+- Layout: a grid with one slot per bar in the kit, matching the physical boxes: 4-pack 1 x 4, 5-pack 1 x 5, 6-pack 1 x 6, 12-pack 2 x 6. Each chosen flavor fills as many slots as its quantity, in a stable order; unfilled slots show a placeholder until the mix reaches the kit size. 
 - Fallbacks: a neutral placeholder tile for products with no image; lazy-load images and size them with Shopify's CDN image transforms.
 - Reuse: the same composition appears on the pick list so the packer can match the box visually.
 - Pure function maps a mix to an ordered list of slots (unit tested); the rendering is covered by Playwright.

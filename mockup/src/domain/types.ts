@@ -1,4 +1,4 @@
-export type KitSize = 4 | 6 | 12;
+export type KitSize = 4 | 5 | 6 | 12;
 
 export interface Location {
   readonly id: string;

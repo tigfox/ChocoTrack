@@ -45,6 +45,15 @@ export const KIT_4: Variant = {
   kitSize: 4,
 };
 
+export const KIT_5: Variant = {
+  id: 'v-kit-smp-5',
+  title: 'Sampler Kit - 5 Pack',
+  sku: 'SMP-5',
+  barcode: '8500300000005',
+  collectionIds: [],
+  kitSize: 5,
+};
+
 export const KIT_6: Variant = {
   id: 'v-kit-smp-6',
   title: 'Sampler Kit - 6 Pack',
@@ -63,7 +72,7 @@ export const KIT_12: Variant = {
   kitSize: 12,
 };
 
-export const INITIAL_VARIANTS: readonly Variant[] = [...miniVariants, KIT_4, KIT_6, KIT_12];
+export const INITIAL_VARIANTS: readonly Variant[] = [...miniVariants, KIT_4, KIT_5, KIT_6, KIT_12];
 
 const locationIds = LOCATIONS.map((l) => l.id);
 
@@ -75,6 +84,7 @@ const stockLine = (quantities: readonly (number | null)[]): Readonly<Record<stri
 export const initialStock = (): StockMap => ({
   ...Object.fromEntries(MINI_ROWS.map(({ stock }, i) => [(miniVariants[i] as Variant).id, stockLine(stock)])),
   [KIT_4.id]: stockLine([8, 3, null]),
+  [KIT_5.id]: stockLine([6, 2, null]),
   [KIT_6.id]: stockLine([12, 0, null]),
   [KIT_12.id]: stockLine([5, null, null]),
 });

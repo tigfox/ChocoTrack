@@ -5,7 +5,7 @@ import { INITIAL_VARIANTS, LOCATIONS, indexById, initialStock } from './catalog'
 describe('catalog', () => {
   it('has 23 mini flavors and three kit sizes', () => {
     expect(INITIAL_VARIANTS.filter((v) => v.collectionIds.includes('c-mini'))).toHaveLength(23);
-    expect(INITIAL_VARIANTS.filter((v) => v.kitSize).map((v) => v.kitSize)).toEqual([4, 6, 12]);
+    expect(INITIAL_VARIANTS.filter((v) => v.kitSize).map((v) => v.kitSize)).toEqual([4, 5, 6, 12]);
   });
   it('gives every mini bar an image that exists on disk', () => {
     const minis = INITIAL_VARIANTS.filter((v) => v.collectionIds.includes('c-mini'));

@@ -8,6 +8,7 @@ const catalog = [dark, milk, mint];
 describe('boxLayout', () => {
   it.each([
     [4, { rows: 1, cols: 4 }],
+    [5, { rows: 1, cols: 5 }],
     [6, { rows: 1, cols: 6 }],
     [12, { rows: 2, cols: 6 }],
   ] as const)('%s bars -> %o', (size, layout) => {
