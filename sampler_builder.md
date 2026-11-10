@@ -7,7 +7,7 @@ A Shopify app that assembles "sampler kits" from mini chocolate bar inventory, u
 | Area | Decision |
 |---|---|
 | Kit model | Assembled/physical kits. Assembly consumes components and adds stock to the kit's InventoryItem. |
-| Kit sizes | Four variants: **4-pack** (1x4 box), **5-pack** (1x5), **6-pack** (1x6) and **12-pack** (2x6). Mini bars per kit must equal the kit size exactly. |
+| Kit sizes | Four variants: **4-pack** (1x4 box), **5-pack** (1x5; layout assumed, to confirm), **6-pack** (1x6) and **12-pack** (2x6). Mini bars per kit must equal the kit size exactly. |
 | Components | About 20 flavors of mini chocolate bar (the mockup uses 23 names taken from the River Sea Chocolates bar collection). Tracked in inventory, not sold individually. Any combination may go in a kit. |
 | Recipe | None stored. Components and quantities are chosen at each assembly run (the same mix is built N times per run). |
 | Kit SKU | An ordinary tracked variant. The app can create it or link an existing variant. |
@@ -61,14 +61,14 @@ Cloud Run, App Runner and App Platform are the lowest-effort options for a low-t
 
 ## Phases (TDD, 80%+ coverage)
 
-### Phase 0 - Clickable mockup for store-team feedback  *(built, including pick list and box preview; awaiting feedback)*
+### Phase 0 - Clickable mockup for store-team feedback  *(built and signed off by the store team; 5-pack added from their feedback)*
 
 A standalone React + Vite + TypeScript app in `/mockup`, using real Polaris web components (`s-*` elements from Shopify's CDN, typed with `@shopify/polaris-types`) in React 19, fake data and no backend, served by nginx in Docker on this laptop (`docker compose up --build`, http://localhost:8080).
 
 - Screens: Assemble, Disassemble, Create kit, a printable pick list, a box preview built from name-only placeholder images, and the result states (success, shortage, not stocked, stale-stock conflict).
 - Pure domain logic (`src/domain`) is unit-tested and is meant to carry over into the real app. UI flows are covered by Playwright end-to-end tests in a real browser, since jsdom does not run the web components.
 - `mockup/WALKTHROUGH.md` holds the feedback scenarios and questions.
-- **Gate:** Phase 1 starts only after the store team signs off. Feedback changes go into the mockup first, then into this plan.
+- **Gate passed:** the store team signed off. Phase 1 is next.
 
 Notes: the mockup page needs internet access to load Polaris from Shopify's CDN. It works standalone without App Bridge. `s-select` does not refresh option labels when they change, so the mockup remounts it when stock text changes; expect the same in the real app.
 
