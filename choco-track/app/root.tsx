@@ -10,7 +10,7 @@ const PRINT_CSS = `
   .pick-sheet .sign-line { margin-top: 28px; }
   @media print {
     #app-root { display: none !important; }
-    #print-root { display: block; }
+    #print-root { display: block; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     body { background: #fff; }
   }
 `;
