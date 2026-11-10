@@ -18,7 +18,7 @@ A Shopify app that assembles "sampler kits" from mini chocolate bar inventory, u
 | Surface | Embedded admin UI only. No storefront, POS or order webhooks in v1. |
 | Stack | Shopify CLI React Router template (TypeScript, Polaris, App Bridge). Prisma only for OAuth session storage. |
 | Distribution | Built for one store; no hardcoded shop so it can go public later. |
-| Hosting | **Undecided - the store team chooses AWS or GCP.** Build cloud-portable so either works (see Hosting). |
+| Hosting | **Undecided - the store team chooses among AWS, GCP, DigitalOcean App Platform, or a DigitalOcean Droplet.** Build container-portable so any works (see Hosting). |
 | Deferred | Lots and expiry dates, cost rollup, templates, audit/history UI. |
 
 ## Key design points
@@ -30,27 +30,32 @@ A Shopify app that assembles "sampler kits" from mini chocolate bar inventory, u
 5. **Search.** `productVariants(query:)` with `sku:` and `barcode:` filters plus collection filtering. Inventory levels come from `inventoryItem.inventoryLevels`.
 6. **Scopes.** `read_products`, `write_products`, `read_inventory`, `write_inventory`, `read_locations`.
 
-## Hosting (AWS or GCP - pending store-team decision)
+## Hosting (AWS, GCP or DigitalOcean - pending store-team decision)
 
-The app is a stateless Node web server plus a small database for Shopify OAuth sessions only (kit data lives in Shopify). That keeps either cloud simple.
+The app is a stateless Node web server plus a small database for Shopify OAuth sessions only (kit data lives in Shopify). That keeps every option below simple.
 
 **Portability rules from day one**
 - Ship as a container image (the Shopify template includes a Dockerfile), configured only through environment variables.
-- Prisma on PostgreSQL for session storage; no cloud-specific SDKs in the domain or service layers.
+- Prisma on PostgreSQL for session storage; no provider-specific SDKs in the domain or service layers.
 - Secrets (Shopify API key and secret, DB URL) come from the platform secret manager, never from the repo.
 - Public HTTPS URL with a stable domain, because Shopify needs an app URL, OAuth redirect URLs and webhook endpoints (`app/uninstalled`, and the GDPR topics if the app goes public).
 - A health-check endpoint, structured logs to stdout, and CI that builds, tests and pushes the image.
 
-| Concern | AWS | GCP |
-|---|---|---|
-| Runtime | ECS Fargate (or App Runner) behind an ALB | Cloud Run |
-| Database | RDS PostgreSQL (small) | Cloud SQL PostgreSQL (small) |
-| Secrets | Secrets Manager | Secret Manager |
-| Registry | ECR | Artifact Registry |
-| Logs | CloudWatch | Cloud Logging |
-| IaC | Terraform | Terraform |
+| Concern | AWS | GCP | DigitalOcean App Platform | DigitalOcean Droplet |
+|---|---|---|---|---|
+| Runtime | ECS Fargate (or App Runner) behind an ALB | Cloud Run | Managed container service (deploy from image or GitHub) | One VM running Docker Compose, with Caddy or nginx for HTTPS |
+| Database | RDS PostgreSQL (small) | Cloud SQL PostgreSQL (small) | Dev database or managed Postgres | Postgres container on the VM, or managed Postgres |
+| Secrets | Secrets Manager | Secret Manager | App-level encrypted env vars | Env file on the VM (restricted permissions) |
+| Registry | ECR | Artifact Registry | DigitalOcean Container Registry | DigitalOcean Container Registry or Docker Hub |
+| Logs | CloudWatch | Cloud Logging | Built-in logs | Docker logs; ship elsewhere if needed |
+| Scale to zero | No (Fargate) / paused (App Runner) | Yes | No, always on | No, always on |
+| IaC | Terraform | Terraform | Terraform or app spec file | Terraform plus a Compose file |
+| Approx. monthly cost* | $15-30 | $10-25 | $12-20 | ~$6 |
+| Ops burden | Low-medium | Low | Low | Higher: patching, backups and deploys are ours |
 
-Cloud Run and App Runner are the lowest-effort options for a low-traffic internal app. Questions for the store team: any existing cloud account or compliance constraints, who owns billing and deploys, and whether a staging environment is needed.
+*Rough figures from memory for a very low-usage app; verify with each provider's pricing page.
+
+Cloud Run, App Runner and App Platform are the lowest-effort options for a low-traffic internal app. A Droplet is the cheapest but we would own OS patching, backups, TLS renewal and deploy scripts. Questions for the store team: any existing cloud account or compliance constraints, who owns billing and deploys, and whether a staging environment is needed.
 
 ## Phases (TDD, 80%+ coverage)
 
@@ -93,7 +98,7 @@ Playwright E2E tests on the dev store, security review, error and empty states, 
 
 ### Phase 7 - Deploy
 
-Once the cloud is chosen: Terraform for the selected provider, a CI/CD pipeline, a staging deploy against the dev store, then production. Update the Shopify app URLs and webhooks to the hosted domain.
+Once the host is chosen: infrastructure as code for the selected provider (a Compose file and bootstrap script for a Droplet), a CI/CD pipeline, a staging deploy against the dev store, then production. Update the Shopify app URLs and webhooks to the hosted domain.
 
 ### Later
 
@@ -112,5 +117,5 @@ Public-app work (billing, GDPR webhooks, app review), lots and expiry, cost roll
 - Is one identical mix per run enough, or do they need different mixes per kit in a single run?
 - Should full-size bars ever be allowed as kit contents?
 - Is there a usual assembly location, or should the location be chosen every time?
-- Which cloud, AWS or GCP, and who owns the account and deploys?
+- Which option (AWS, GCP, DigitalOcean App Platform or Droplet), and who owns the account and deploys?
 - Is anything missing on screen (cost, low-stock flavors, a printable pick list)?
