@@ -1,4 +1,4 @@
-export type KitSize = 6 | 12;
+export type KitSize = 4 | 6 | 12;
 
 export interface Location {
   readonly id: string;
@@ -16,6 +16,8 @@ export interface Variant {
   readonly sku: string;
   readonly barcode: string;
   readonly collectionIds: readonly string[];
+  /** Product image (a Shopify image URL in the real app). */
+  readonly imageUrl?: string;
   /** Present only on sellable kit variants. */
   readonly kitSize?: KitSize;
 }

@@ -1,9 +1,18 @@
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { INITIAL_VARIANTS, LOCATIONS, indexById, initialStock } from './catalog';
 
 describe('catalog', () => {
-  it('has 23 mini flavors and two kit sizes', () => {
+  it('has 23 mini flavors and three kit sizes', () => {
     expect(INITIAL_VARIANTS.filter((v) => v.collectionIds.includes('c-mini'))).toHaveLength(23);
-    expect(INITIAL_VARIANTS.filter((v) => v.kitSize).map((v) => v.kitSize)).toEqual([6, 12]);
+    expect(INITIAL_VARIANTS.filter((v) => v.kitSize).map((v) => v.kitSize)).toEqual([4, 6, 12]);
+  });
+  it('gives every mini bar an image that exists on disk', () => {
+    const minis = INITIAL_VARIANTS.filter((v) => v.collectionIds.includes('c-mini'));
+    for (const v of minis) {
+      expect(v.imageUrl).toMatch(/^\/images\/mini\/.+\.svg$/);
+      expect(existsSync(join(process.cwd(), 'public', v.imageUrl ?? ''))).toBe(true);
+    }
   });
   it('has unique ids, SKUs and barcodes', () => {
     for (const key of ['id', 'sku', 'barcode'] as const) {

@@ -23,3 +23,7 @@ export const openDisassemble = async (page: Page) => {
   await page.getByRole('button', { name: 'Disassemble kits' }).click();
   await expect(page.getByRole('button', { name: 'Break down 1 kit' })).toBeVisible();
 };
+
+/** The option for a kit in the Kit select, found by SKU. */
+export const kitOption = (page: Page, sku: string) =>
+  field(page, 's-select', 'Kit').locator('option', { hasText: `(${sku})` });

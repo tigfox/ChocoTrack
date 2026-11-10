@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { BOLIVIA, MILK, add, field, open, openDisassemble } from './helpers';
+import { BOLIVIA, MILK, add, field, kitOption, open, openDisassemble } from './helpers';
 
 test.beforeEach(async ({ page }) => {
   await open(page);
@@ -11,7 +11,7 @@ test('returns mini bars to stock', async ({ page }) => {
   await add(page, MILK, 3);
   await page.getByRole('button', { name: 'Break down 1 kit' }).click();
   await expect(page.getByText('Disassembled 1 x Sampler Kit - 6 Pack complete')).toBeVisible();
-  await expect(field(page, 's-select', 'Kit').locator('option').first()).toContainText('11 in stock');
+  await expect(kitOption(page, 'SMP-6')).toContainText('11 in stock');
 });
 
 test('multiplies the per-kit mix by the number of kits', async ({ page }) => {
@@ -22,7 +22,7 @@ test('multiplies the per-kit mix by the number of kits', async ({ page }) => {
   await page.getByRole('button', { name: 'Break down 2 kits' }).click();
   await expect(page.getByText('Disassembled 2 x Sampler Kit - 6 Pack complete')).toBeVisible();
   await expect(page.getByText(/\+6\s+Mini - Bolivia 72%/)).toBeVisible();
-  await expect(field(page, 's-select', 'Kit').locator('option').first()).toContainText('10 in stock');
+  await expect(kitOption(page, 'SMP-6')).toContainText('10 in stock');
 });
 
 test('blocks when the per-kit total is wrong', async ({ page }) => {

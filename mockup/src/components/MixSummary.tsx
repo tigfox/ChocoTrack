@@ -11,6 +11,9 @@ interface Props {
   readonly issues: readonly ValidationIssue[];
   readonly actionLabel: string;
   readonly onAction: () => void;
+  readonly secondaryLabel?: string;
+  readonly secondaryDisabled?: boolean;
+  readonly onSecondary?: () => void;
 }
 
 export function MixSummary(p: Props) {
@@ -42,6 +45,11 @@ export function MixSummary(p: Props) {
         <s-button variant="primary" inlineSize="fill" disabled={p.issues.length > 0} onClick={p.onAction}>
           {p.actionLabel}
         </s-button>
+        {p.onSecondary && (
+          <s-button inlineSize="fill" disabled={p.secondaryDisabled} onClick={p.onSecondary}>
+            {p.secondaryLabel}
+          </s-button>
+        )}
       </s-stack>
     </s-section>
   );
