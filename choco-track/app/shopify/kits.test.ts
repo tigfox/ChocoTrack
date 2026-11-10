@@ -14,7 +14,7 @@ describe('createKit', () => {
     const client = fakeClient({ productSet: { product, userErrors: [] } });
     const kit = await createKit(client, { title: 'Sampler Kit - 5 Pack', size: 5, sku: 'SMP-5', price: '17.00' });
     expect(kit).toMatchObject({ id: 'v1', inventoryItemId: 'i1', sku: 'SMP-5', kitSize: 5, title: 'Sampler Kit - 5 Pack' });
-    const input = (client.calls[0]?.variables as { input: Record<string, any> }).input;
+    const input = (client.calls[0]?.variables as { input: { tags: string[]; metafields: unknown[]; variants: Record<string, unknown>[] } }).input;
     expect(input.tags).toEqual(['choco-track-kit']);
     expect(input.metafields).toEqual([{ namespace: 'choco_track', key: 'kit_size', type: 'number_integer', value: '5' }]);
     expect(input.variants[0]).toMatchObject({ sku: 'SMP-5', price: '17.00', inventoryItem: { tracked: true } });

@@ -100,6 +100,8 @@ Findings from the live store that shape the app:
 
 Wire the approved mockup screens to the service layer: location, kit pick/create, mix picker, live max buildable, submit with success or error banner.
 
+*Built (awaiting a manual check in the dev store):* `/app/assemble` loads locations, collections, kits and kit stock; the mix picker searches Shopify server-side (`/app/api/search`, debounced, name/SKU/barcode plus collection); submit posts JSON to the route action, which re-reads variants from Shopify (kit sizes and inventory item ids are never taken from the browser), validates, and calls `submitRun`. Create-a-kit posts to `/app/api/kits`. Untrusted JSON is validated in `app/lib`. Box preview, optional print sheet and result banners are ported from the mockup. Known limits: search returns the first 50 matches (no paging), and the collection filter defaults to "All items".
+
 ### Phase 4b - Printable pick list (before saving)
 
 A **Print pick list** action next to Assemble (and Break down) that opens a print-ready sheet without changing inventory, so the team can pull stock first and submit afterwards.

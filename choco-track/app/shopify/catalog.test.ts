@@ -1,4 +1,4 @@
-import { buildSearchQuery, listCollections, listKits, searchVariants, toCatalogVariant, type VariantNode } from './catalog';
+import { buildSearchQuery, getVariants, listCollections, listKits, searchVariants, toCatalogVariant, type VariantNode } from './catalog';
 import { fakeClient } from './fakeClient';
 
 const node = (over: Partial<VariantNode> = {}, product: Partial<VariantNode['product']> = {}): VariantNode => ({
@@ -97,4 +97,18 @@ describe('listKits', () => {
 it('listCollections maps id and title', async () => {
   const client = fakeClient({ collections: { nodes: [{ id: 'c1', title: 'Dark', extra: 1 }] } });
   await expect(listCollections(client)).resolves.toEqual([{ id: 'c1', title: 'Dark' }]);
+});
+
+describe('getVariants', () => {
+  it('looks up variants by id, skipping missing ones', async () => {
+    const client = fakeClient({ nodes: [node(), null, {}] });
+    const found = await getVariants(client, ['a', 'b', 'c']);
+    expect(found.map((v) => v.sku)).toEqual(['MINI-RUM']);
+    expect(client.calls[0]?.variables).toEqual({ ids: ['a', 'b', 'c'] });
+  });
+  it('makes no call for an empty list', async () => {
+    const client = fakeClient();
+    await expect(getVariants(client, [])).resolves.toEqual([]);
+    expect(client.calls).toHaveLength(0);
+  });
 });

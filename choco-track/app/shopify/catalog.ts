@@ -32,6 +32,12 @@ const SEARCH_QUERY = `#graphql
   }
 `;
 
+const BY_ID_QUERY = `#graphql
+  query VariantsById($ids: [ID!]!) {
+    nodes(ids: $ids) { ... on ProductVariant { ${VARIANT_FIELDS} } }
+  }
+`;
+
 const COLLECTIONS_QUERY = `#graphql
   query Collections { collections(first: 100) { nodes { id title } } }
 `;
@@ -135,4 +141,11 @@ export const listKits = async (client: GraphqlClient): Promise<readonly CatalogV
 export const listCollections = async (client: GraphqlClient): Promise<readonly Collection[]> => {
   const data = await client<{ collections: { nodes: ReadonlyArray<{ id: string; title: string }> } }>(COLLECTIONS_QUERY);
   return data.collections.nodes.map(({ id, title }) => ({ id, title }));
+};
+
+/** Looks variants up by id (the server never trusts inventory item ids or kit sizes sent by the browser). */
+export const getVariants = async (client: GraphqlClient, ids: readonly string[]): Promise<readonly CatalogVariant[]> => {
+  if (ids.length === 0) return [];
+  const data = await client<{ nodes: ReadonlyArray<VariantNode | null> }>(BY_ID_QUERY, { ids });
+  return data.nodes.filter((n): n is VariantNode => n !== null && n.inventoryItem !== undefined).map(toCatalogVariant);
 };
