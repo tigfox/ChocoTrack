@@ -4,6 +4,7 @@ import { buildPickList } from "../domain/pickList";
 import { sumUnits } from "../domain/stock";
 import type { StockMap, UnitCounts } from "../domain/types";
 import { useVariantSearch } from "../hooks/useVariantSearch";
+import { PAGE_SIZE } from "../lib/searchParams";
 import type { CatalogVariant } from "../shopify/catalog";
 import type { SubmitResult } from "../shopify/submit";
 import type { Workspace } from "../shopify/workspace";
@@ -48,13 +49,14 @@ export function KitRunView({ workspace, mode }: Props) {
   const [perKit, setPerKit] = useState<UnitCounts>({});
   const [query, setQuery] = useState("");
   const [collectionId, setCollectionId] = useState("");
+  const [limit, setLimit] = useState(PAGE_SIZE);
   const [known, setKnown] = useState<Readonly<Record<string, CatalogVariant>>>(() => index(workspace.kits));
   const [stock, setStock] = useState<StockMap>(workspace.stock);
   const [shown, setShown] = useState<Shown | undefined>();
   const [creating, setCreating] = useState(false);
   const runId = useRef(crypto.randomUUID());
 
-  const search = useVariantSearch(query, collectionId);
+  const search = useVariantSearch(query, collectionId, limit);
   const submitFetcher = useFetcher<RunResponse>();
   const kitFetcher = useFetcher<KitResponse>();
   const submitting = submitFetcher.state !== "idle";
@@ -119,6 +121,18 @@ export function KitRunView({ workspace, mode }: Props) {
   return (
     <s-page heading={config.pageHeading} inlineSize="large">
       <s-stack gap="base">
+        {workspace.locations.length === 0 && (
+          <s-banner tone="critical" heading="No locations found">
+            Add an active location in Shopify (Settings, Locations) to use this page.
+          </s-banner>
+        )}
+        {kits.length === 0 && (
+          <s-banner tone="warning" heading="No kits yet">
+            {config.canCreateKit
+              ? "Create a kit to get started. A kit is an ordinary product with tracked inventory."
+              : "There are no kits to break down. Kits are created on the Assemble page."}
+          </s-banner>
+        )}
         {shown && (
           <ResultBanner {...shown} variantsById={known} onDismiss={() => setShown(undefined)} />
         )}
@@ -147,9 +161,17 @@ export function KitRunView({ workspace, mode }: Props) {
               counts={perKit}
               onChange={setPerKit}
               query={query}
-              onQuery={setQuery}
+              onQuery={(q) => {
+                setQuery(q);
+                setLimit(PAGE_SIZE);
+              }}
               collectionId={collectionId}
-              onCollection={setCollectionId}
+              onCollection={(id) => {
+                setCollectionId(id);
+                setLimit(PAGE_SIZE);
+              }}
+              canShowMore={(search.data?.variants.length ?? 0) >= limit}
+              onShowMore={() => setLimit((n) => n + PAGE_SIZE)}
               loading={search.loading}
               error={search.error}
               {...(config.flagShortages ? { demandMultiplier: validCount ? kitCount : 1 } : {})}

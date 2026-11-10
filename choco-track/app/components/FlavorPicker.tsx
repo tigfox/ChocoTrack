@@ -19,6 +19,8 @@ interface Props {
   readonly collectionId: string;
   readonly onCollection: (id: string) => void;
   readonly loading: boolean;
+  readonly canShowMore: boolean;
+  readonly onShowMore: () => void;
   readonly error?: string | undefined;
   /** When set, a row is flagged if counts x multiplier exceeds available stock. */
   readonly demandMultiplier?: number;
@@ -80,6 +82,11 @@ export function FlavorPicker(p: Props) {
             ))}
           </s-stack>
         </div>
+        {p.canShowMore && !p.loading && (
+          <div>
+            <s-button variant="tertiary" onClick={p.onShowMore}>Show more</s-button>
+          </div>
+        )}
       </s-stack>
     </s-section>
   );

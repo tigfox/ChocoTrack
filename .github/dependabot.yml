@@ -1,0 +1,18 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /choco-track
+    schedule:
+      interval: weekly
+  - package-ecosystem: npm
+    directory: /mockup
+    schedule:
+      interval: monthly
+  - package-ecosystem: docker
+    directory: /choco-track
+    schedule:
+      interval: monthly
+  - package-ecosystem: docker
+    directory: /mockup
+    schedule:
+      interval: monthly
