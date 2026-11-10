@@ -7,8 +7,8 @@ export default defineConfig({
     include: ["app/**/*.test.ts"],
     coverage: {
       provider: "v8",
-      include: ["app/domain/**/*.ts"],
-      exclude: ["app/domain/**/*.test.ts", "app/domain/fixtures.ts"],
+      include: ["app/domain/**/*.ts", "app/shopify/**/*.ts"],
+      exclude: ["app/**/*.test.ts", "app/domain/fixtures.ts", "app/shopify/fakeClient.ts"],
       thresholds: { lines: 80, functions: 80, branches: 80, statements: 80 },
     },
   },

@@ -88,6 +88,14 @@ Move `mockup/src/domain` into the app (or a shared package) and adjust for any f
 
 A repository-style wrapper around the GraphQL calls (locations, variant search, levels, adjust, activate, create kit) with `userErrors` mapped to friendly messages. Integration-tested against mocked responses.
 
+*Done:* `choco-track/app/shopify` holds `client` (wraps the template's `admin.graphql`), `locations`, `catalog` (search with collection filter, kits, collections, images), `inventory` (stock levels, `inventoryActivate`, the single atomic `inventoryAdjustQuantities` call), `kits` (create a kit) and `submit` (validate, activate, adjust, refresh on conflict). Verified against the dev store with `npm run test:live`.
+
+Findings from the live store that shape the app:
+- `inventoryAdjustQuantities` takes the idempotency key as a variable (`@idempotent(key: $key)`) and each line needs `changeFromQuantity`. A stale quantity returns `CHANGE_FROM_QUANTITY_STALE`, which becomes the "stock changed" conflict message.
+- A kit is a product tagged `choco-track-kit` with an integer metafield `choco_track.kit_size`. Shopify cannot search variants by tag or metafield, so kits are listed through `products(query: "tag:choco-track-kit")`.
+- Free-text variant search matches title, SKU prefix and exact barcode; `collection:<id>` narrows by collection.
+- The adjustment reason is `correction`; `referenceDocumentUri` (`gid://choco-track/Assembly/<uuid>` or `Disassembly`) says what happened.
+
 ### Phase 4 - Assemble UI
 
 Wire the approved mockup screens to the service layer: location, kit pick/create, mix picker, live max buildable, submit with success or error banner.

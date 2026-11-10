@@ -70,12 +70,18 @@ for (const c of COLLECTIONS) {
 const quantities = (stock) =>
   stock.flatMap((q, i) => (q === null ? [] : [{ locationId: locations[LOCATION_NAMES[i]], name: "available", quantity: q }]));
 
-const createProduct = ({ title, sku, barcode, price, status, collections, stock }) => {
+const createProduct = ({ title, sku, barcode, price, status, collections, stock, kitSize }) => {
   if (existingSkus.has(sku)) return console.log(`skip  ${sku}`);
   const input = {
     title,
     status,
     collections,
+    ...(kitSize
+      ? {
+          tags: ["choco-track-kit"],
+          metafields: [{ namespace: "choco_track", key: "kit_size", type: "number_integer", value: String(kitSize) }],
+        }
+      : {}),
     productOptions: [{ name: "Title", position: 1, values: [{ name: "Default Title" }] }],
     variants: [
       {
@@ -116,6 +122,7 @@ for (const k of KITS) {
     price: k.price,
     status: "ACTIVE",
     collections: [],
+    kitSize: k.size,
     stock: k.stock,
   });
 }
