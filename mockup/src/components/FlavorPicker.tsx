@@ -40,7 +40,7 @@ export function FlavorPicker({ heading, variants, stock, locationId, counts, onC
             <s-search-field
               label="Search"
               value={query}
-              placeholder="Name, SKU or barcode - press Enter on an exact SKU/barcode to add one"
+              placeholder="Name, SKU or barcode (Enter adds an exact match)"
               onInput={(e) => setQuery(fieldValue(e))}
             />
           </div>

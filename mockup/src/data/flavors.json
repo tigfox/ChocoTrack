@@ -1,0 +1,247 @@
+[
+  {
+    "name": "100% Cacao",
+    "collections": [
+      "c-dark"
+    ],
+    "stock": [
+      90,
+      20,
+      null
+    ]
+  },
+  {
+    "name": "Surfer's Dark Seas",
+    "collections": [
+      "c-dark"
+    ],
+    "stock": [
+      130,
+      30,
+      12
+    ]
+  },
+  {
+    "name": "Bolivia 72%",
+    "collections": [
+      "c-dark"
+    ],
+    "stock": [
+      240,
+      60,
+      30
+    ]
+  },
+  {
+    "name": "Chuncho 72%",
+    "collections": [
+      "c-dark"
+    ],
+    "stock": [
+      150,
+      35,
+      null
+    ]
+  },
+  {
+    "name": "Chuao 72%",
+    "collections": [
+      "c-dark"
+    ],
+    "stock": [
+      120,
+      28,
+      10
+    ]
+  },
+  {
+    "name": "Haiti 72%",
+    "collections": [
+      "c-dark"
+    ],
+    "stock": [
+      110,
+      22,
+      null
+    ]
+  },
+  {
+    "name": "Puerto Rico 72%",
+    "collections": [
+      "c-dark"
+    ],
+    "stock": [
+      100,
+      20,
+      8
+    ]
+  },
+  {
+    "name": "Thailand 72%",
+    "collections": [
+      "c-dark"
+    ],
+    "stock": [
+      95,
+      18,
+      null
+    ]
+  },
+  {
+    "name": "Uganda 72%",
+    "collections": [
+      "c-dark"
+    ],
+    "stock": [
+      85,
+      null,
+      null
+    ]
+  },
+  {
+    "name": "Tanzania 72%",
+    "collections": [
+      "c-dark"
+    ],
+    "stock": [
+      105,
+      24,
+      9
+    ]
+  },
+  {
+    "name": "Zorzal 72%",
+    "collections": [
+      "c-dark"
+    ],
+    "stock": [
+      70,
+      12,
+      null
+    ]
+  },
+  {
+    "name": "Double Bean Double Buzz",
+    "collections": [],
+    "stock": [
+      160,
+      40,
+      20
+    ]
+  },
+  {
+    "name": "Hawaiian Salt 70%",
+    "collections": [
+      "c-dark"
+    ],
+    "stock": [
+      200,
+      50,
+      25
+    ]
+  },
+  {
+    "name": "Cherry Blossom Dark",
+    "collections": [
+      "c-dark"
+    ],
+    "stock": [
+      75,
+      14,
+      6
+    ]
+  },
+  {
+    "name": "Raspberry Vanilla Tea 65%",
+    "collections": [
+      "c-dark"
+    ],
+    "stock": [
+      60,
+      10,
+      null
+    ]
+  },
+  {
+    "name": "El Camino - Olive Oil Dark Chocolate",
+    "collections": [
+      "c-dark"
+    ],
+    "stock": [
+      55,
+      9,
+      4
+    ]
+  },
+  {
+    "name": "Rum Caramel",
+    "collections": [],
+    "stock": [
+      180,
+      38,
+      18
+    ]
+  },
+  {
+    "name": "Peach IPA (Mountain Peach & Hops)",
+    "collections": [],
+    "stock": [
+      65,
+      11,
+      null
+    ]
+  },
+  {
+    "name": "Desert Flower",
+    "collections": [],
+    "stock": [
+      14,
+      4,
+      null
+    ]
+  },
+  {
+    "name": "Coconut Milk Chocolate 55%",
+    "collections": [
+      "c-milk"
+    ],
+    "stock": [
+      170,
+      36,
+      15
+    ]
+  },
+  {
+    "name": "Organic Milk Chocolate",
+    "collections": [
+      "c-milk"
+    ],
+    "stock": [
+      310,
+      80,
+      45
+    ]
+  },
+  {
+    "name": "Salted Caramel Milk Chocolate",
+    "collections": [
+      "c-milk"
+    ],
+    "stock": [
+      260,
+      70,
+      35
+    ]
+  },
+  {
+    "name": "Smoked Salt Milk Chocolate",
+    "collections": [
+      "c-milk"
+    ],
+    "stock": [
+      140,
+      30,
+      null
+    ]
+  }
+]

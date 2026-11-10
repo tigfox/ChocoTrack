@@ -9,10 +9,14 @@ interface Props {
   readonly onCreate: (kit: Variant) => void;
 }
 
+type SizeOption = '4' | '5' | '6' | '12';
+
+const toSize = (v: string): SizeOption => (v === '4' || v === '5' || v === '12' ? v : '6');
+
 export function CreateKitModal({ open, existing, onClose, onCreate }: Props) {
   const ref = useRef<HTMLElementTagNameMap['s-modal']>(null);
   const [title, setTitle] = useState('');
-  const [size, setSize] = useState<'6' | '12'>('6');
+  const [size, setSize] = useState<SizeOption>('6');
   const [sku, setSku] = useState('');
   const [barcode, setBarcode] = useState('');
 
@@ -62,7 +66,9 @@ export function CreateKitModal({ open, existing, onClose, onCreate }: Props) {
           In the real app this creates a Shopify product with tracked inventory. The kit's contents are chosen each time you assemble.
         </s-paragraph>
         <s-text-field label="Title" value={title} onInput={(e) => setTitle(fieldValue(e))} />
-        <s-select label="Kit size" value={size} onInput={(e) => setSize(fieldValue(e) === '12' ? '12' : '6')}>
+        <s-select label="Kit size" value={size} onInput={(e) => setSize(toSize(fieldValue(e)))}>
+          <s-option value="4">4 mini bars</s-option>
+          <s-option value="5">5 mini bars</s-option>
           <s-option value="6">6 mini bars</s-option>
           <s-option value="12">12 mini bars</s-option>
         </s-select>

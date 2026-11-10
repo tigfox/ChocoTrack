@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { BOLIVIA, LOW_STOCK, MILK, add, field, open, unitTotal } from './helpers';
+import { BOLIVIA, LOW_STOCK, MILK, add, field, kitOption, open, unitTotal } from './helpers';
 
 test.beforeEach(({ page }) => open(page));
 
@@ -18,7 +18,7 @@ test('assembles a kit, shows the adjustments and updates kit stock', async ({ pa
   await page.getByRole('button', { name: 'Assemble 1 kit' }).click();
   await expect(page.getByText('Assembled 1 x Sampler Kit - 6 Pack complete')).toBeVisible();
   await expect(page.getByText(/\+1\s+Sampler Kit - 6 Pack/)).toBeVisible();
-  await expect(field(page, 's-select', 'Kit').locator('option').first()).toContainText('13 in stock');
+  await expect(kitOption(page, 'SMP-6')).toContainText('13 in stock');
   await expect(unitTotal(page)).toHaveText('0 / 6');
 });
 
@@ -70,5 +70,5 @@ test('resets demo data', async ({ page }) => {
   await add(page, BOLIVIA, 6);
   await page.getByRole('button', { name: 'Assemble 1 kit' }).click();
   await page.getByRole('button', { name: 'Reset demo data' }).click();
-  await expect(field(page, 's-select', 'Kit').locator('option').first()).toContainText('12 in stock');
+  await expect(kitOption(page, 'SMP-6')).toContainText('12 in stock');
 });

@@ -7,7 +7,7 @@ A Shopify app that assembles "sampler kits" from mini chocolate bar inventory, u
 | Area | Decision |
 |---|---|
 | Kit model | Assembled/physical kits. Assembly consumes components and adds stock to the kit's InventoryItem. |
-| Kit sizes | Two variants: **6-pack** and **12-pack**. Mini bars per kit must equal the kit size exactly. |
+| Kit sizes | Four variants: **4-pack** (1x4 box), **5-pack** (1x5), **6-pack** (1x6) and **12-pack** (2x6). Mini bars per kit must equal the kit size exactly. |
 | Components | About 20 flavors of mini chocolate bar (the mockup uses 23 names taken from the River Sea Chocolates bar collection). Tracked in inventory, not sold individually. Any combination may go in a kit. |
 | Recipe | None stored. Components and quantities are chosen at each assembly run (the same mix is built N times per run). |
 | Kit SKU | An ordinary tracked variant. The app can create it or link an existing variant. |
@@ -15,7 +15,7 @@ A Shopify app that assembles "sampler kits" from mini chocolate bar inventory, u
 | Locations | Multi-location. Every run happens at a chosen location. |
 | Component picker | Search by title, SKU or barcode (scanner-style Enter to add), with a collection filter (defaults to the mini-bar collection). |
 | Records | Shopify only: no app-side business tables. Adjustment `reason` and `referenceDocumentUri` form the audit trail in Shopify's inventory history. |
-| Pick list | A printable pick list is available before any change is saved: what to pull from stock, how many of each, from which location. Printing never changes inventory. |
+| Pick list | A printable pick list is available before any change is saved: what to pull from stock, how many of each, from which location. Printing is optional and never changes inventory. |
 | Box image | The assemble screen shows an image of the finished box, composed from the Shopify product images of the chosen mini bars. |
 | Surface | Embedded admin UI only. No storefront, POS or order webhooks in v1. |
 | Stack | Shopify CLI React Router template (TypeScript, Polaris, App Bridge). Prisma only for OAuth session storage. |
@@ -61,11 +61,11 @@ Cloud Run, App Runner and App Platform are the lowest-effort options for a low-t
 
 ## Phases (TDD, 80%+ coverage)
 
-### Phase 0 - Clickable mockup for store-team feedback  *(built; awaiting feedback)*
+### Phase 0 - Clickable mockup for store-team feedback  *(built, including pick list and box preview; awaiting feedback)*
 
 A standalone React + Vite + TypeScript app in `/mockup`, using real Polaris web components (`s-*` elements from Shopify's CDN, typed with `@shopify/polaris-types`) in React 19, fake data and no backend, served by nginx in Docker on this laptop (`docker compose up --build`, http://localhost:8080).
 
-- Screens: Assemble, Disassemble, Create kit, and the result states (success, shortage, not stocked, stale-stock conflict).
+- Screens: Assemble, Disassemble, Create kit, a printable pick list, a box preview built from name-only placeholder images, and the result states (success, shortage, not stocked, stale-stock conflict).
 - Pure domain logic (`src/domain`) is unit-tested and is meant to carry over into the real app. UI flows are covered by Playwright end-to-end tests in a real browser, since jsdom does not run the web components.
 - `mockup/WALKTHROUGH.md` holds the feedback scenarios and questions.
 - **Gate:** Phase 1 starts only after the store team signs off. Feedback changes go into the mockup first, then into this plan.
@@ -103,8 +103,8 @@ A **Print pick list** action next to Assemble (and Break down) that opens a prin
 
 Show what the finished kit will look like, built from the product images of the chosen mini bars.
 
-- Data: read each component's image from Shopify (variant image, falling back to the product's featured image) in the same query as the variant search; mini bars that are unpublished still return images through the Admin API.
-- Layout: a grid with one slot per bar in the kit (6-pack: 2 x 3, 12-pack: 3 x 4). Each chosen flavor fills as many slots as its quantity, in a stable order; unfilled slots show a placeholder until the mix reaches the kit size. A label under each slot shows the flavor name.
+- Data: the mini bars have product images in Shopify. Read each component's image from Shopify (variant image, falling back to the product's featured image) in the same query as the variant search; mini bars that are unpublished still return images through the Admin API.
+- Layout: a grid with one slot per bar in the kit, matching the physical boxes: 4-pack 1 x 4, 5-pack 1 x 5, 6-pack 1 x 6, 12-pack 2 x 6. Each chosen flavor fills as many slots as its quantity, in a stable order; unfilled slots show a placeholder until the mix reaches the kit size. 
 - Fallbacks: a neutral placeholder tile for products with no image; lazy-load images and size them with Shopify's CDN image transforms.
 - Reuse: the same composition appears on the pick list so the packer can match the box visually.
 - Pure function maps a mix to an ordered list of slots (unit tested); the rendering is covered by Playwright.
