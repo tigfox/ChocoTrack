@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { BlockStack, Modal, Select, Text, TextField } from '@shopify/polaris';
+import { useEffect, useRef, useState } from 'react';
 import type { KitSize, Variant } from '../domain/types';
+import { fieldValue } from '../wc';
 
 interface Props {
   readonly open: boolean;
@@ -10,10 +10,25 @@ interface Props {
 }
 
 export function CreateKitModal({ open, existing, onClose, onCreate }: Props) {
+  const ref = useRef<HTMLElementTagNameMap['s-modal']>(null);
   const [title, setTitle] = useState('');
   const [size, setSize] = useState<'6' | '12'>('6');
   const [sku, setSku] = useState('');
   const [barcode, setBarcode] = useState('');
+
+  useEffect(() => {
+    const modal = ref.current;
+    if (!modal) return;
+    if (open) modal.showOverlay();
+    else modal.hideOverlay();
+  }, [open]);
+
+  useEffect(() => {
+    const modal = ref.current;
+    if (!modal) return undefined;
+    modal.addEventListener('hide', onClose);
+    return () => modal.removeEventListener('hide', onClose);
+  }, [onClose]);
 
   const trimmedSku = sku.trim();
   const error = !title.trim()
@@ -41,29 +56,21 @@ export function CreateKitModal({ open, existing, onClose, onCreate }: Props) {
   };
 
   return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title="Create a new kit"
-      primaryAction={{ content: 'Create kit', onAction: create, disabled: Boolean(error) }}
-      secondaryActions={[{ content: 'Cancel', onAction: onClose }]}
-    >
-      <Modal.Section>
-        <BlockStack gap="300">
-          <Text as="p" tone="subdued">
-            In the real app this creates a Shopify product with tracked inventory. The kit's contents are chosen each time you assemble.
-          </Text>
-          <TextField label="Title" value={title} onChange={setTitle} autoComplete="off" />
-          <Select
-            label="Kit size"
-            options={[{ label: '6 mini bars', value: '6' }, { label: '12 mini bars', value: '12' }]}
-            value={size}
-            onChange={(v) => setSize(v === '12' ? '12' : '6')}
-          />
-          <TextField label="SKU" value={sku} onChange={setSku} autoComplete="off" error={sku && error ? error : undefined} />
-          <TextField label="Barcode (optional)" value={barcode} onChange={setBarcode} autoComplete="off" />
-        </BlockStack>
-      </Modal.Section>
-    </Modal>
+    <s-modal ref={ref} heading="Create a new kit" id="create-kit-modal">
+      <s-stack gap="base">
+        <s-paragraph color="subdued">
+          In the real app this creates a Shopify product with tracked inventory. The kit's contents are chosen each time you assemble.
+        </s-paragraph>
+        <s-text-field label="Title" value={title} onInput={(e) => setTitle(fieldValue(e))} />
+        <s-select label="Kit size" value={size} onInput={(e) => setSize(fieldValue(e) === '12' ? '12' : '6')}>
+          <s-option value="6">6 mini bars</s-option>
+          <s-option value="12">12 mini bars</s-option>
+        </s-select>
+        <s-text-field label="SKU" value={sku} error={sku && error ? error : undefined} onInput={(e) => setSku(fieldValue(e))} />
+        <s-text-field label="Barcode (optional)" value={barcode} onInput={(e) => setBarcode(fieldValue(e))} />
+      </s-stack>
+      <s-button slot="primary-action" variant="primary" disabled={Boolean(error)} onClick={create}>Create kit</s-button>
+      <s-button slot="secondary-actions" onClick={onClose}>Cancel</s-button>
+    </s-modal>
   );
 }

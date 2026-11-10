@@ -1,6 +1,6 @@
 # ChocoTrack kits - clickable mockup
 
-A fake-data, no-backend prototype of the sampler-kit workflow, built with React and Polaris so the store team can try it and give feedback **before** the real Shopify app is built.
+A fake-data, no-backend prototype of the sampler-kit workflow, built with React and Shopify's Polaris web components (the same UI library the real app will use) so the store team can try it and give feedback **before** the real Shopify app is built.
 
 ## Run it (Docker)
 
@@ -9,6 +9,8 @@ docker compose up --build
 # open http://localhost:8080
 ```
 
+The page loads Polaris from Shopify's CDN (`cdn.shopify.com/shopifycloud/polaris-2.js`), so the laptop needs internet access.
+
 Stop with `Ctrl+C` (or `docker compose down`).
 
 ## Run it (development)
@@ -16,8 +18,9 @@ Stop with `Ctrl+C` (or `docker compose down`).
 ```sh
 npm install
 npm run dev        # http://localhost:5173
-npm test           # unit + UI flow tests
+npm test           # domain unit tests (Vitest)
 npm run test:coverage
+npm run test:e2e   # Playwright UI flows in a real browser (CHROME_CHANNEL=chrome uses installed Chrome)
 ```
 
 ## What's in the mockup
@@ -33,4 +36,5 @@ Everything resets when the page reloads. See `WALKTHROUGH.md` for a guided feedb
 
 - `src/domain` - pure, tested business rules (carried over into the real app)
 - `src/data` - fake catalog: 23 mini flavors named after the River Sea Chocolates bars, 4 full bars, 2 kits, 3 locations
-- `src/components` - Polaris UI
+- `src/components` - UI built from `s-*` Polaris web components
+- `e2e` - Playwright tests of the full flows

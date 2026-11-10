@@ -1,6 +1,7 @@
-import { Banner, List } from '@shopify/polaris';
+import { useRef } from 'react';
 import type { Outcome } from '../domain/workflow';
 import type { Variant } from '../domain/types';
+import { useWcEvent } from '../wc';
 
 interface Props {
   readonly outcome: Outcome;
@@ -13,32 +14,37 @@ interface Props {
 const signed = (n: number) => (n > 0 ? `+${n}` : String(n));
 
 export function ResultBanner({ outcome, label, variantsById, locationName, onDismiss }: Props) {
+  const ref = useRef<HTMLElementTagNameMap['s-banner']>(null);
+  useWcEvent(ref, 'dismiss', onDismiss);
+
   if (outcome.ok) {
     return (
-      <Banner tone="success" title={`${label} complete`} onDismiss={onDismiss}>
-        <p>{`Inventory adjusted at ${locationName} in a single all-or-nothing update:`}</p>
-        <List>
-          {outcome.changes.map((c) => (
-            <List.Item key={c.variantId}>{`${signed(c.delta)}  ${variantsById[c.variantId]?.title ?? c.variantId}`}</List.Item>
-          ))}
-        </List>
-      </Banner>
+      <s-banner ref={ref} tone="success" heading={`${label} complete`} dismissible>
+        <s-stack gap="small">
+          <s-paragraph>{`Inventory adjusted at ${locationName} in a single all-or-nothing update:`}</s-paragraph>
+          <s-unordered-list>
+            {outcome.changes.map((c) => (
+              <s-list-item key={c.variantId}>{`${signed(c.delta)}  ${variantsById[c.variantId]?.title ?? c.variantId}`}</s-list-item>
+            ))}
+          </s-unordered-list>
+        </s-stack>
+      </s-banner>
     );
   }
   if (outcome.kind === 'conflict') {
     return (
-      <Banner tone="warning" title="Nothing was changed" onDismiss={onDismiss}>
-        <p>{outcome.message}</p>
-      </Banner>
+      <s-banner ref={ref} tone="warning" heading="Nothing was changed" dismissible>
+        <s-paragraph>{outcome.message}</s-paragraph>
+      </s-banner>
     );
   }
   return (
-    <Banner tone="critical" title="Can't complete this yet" onDismiss={onDismiss}>
-      <List>
+    <s-banner ref={ref} tone="critical" heading="Can't complete this yet" dismissible>
+      <s-unordered-list>
         {outcome.issues.map((i) => (
-          <List.Item key={`${i.code}-${i.variantId ?? ''}`}>{i.message}</List.Item>
+          <s-list-item key={`${i.code}-${i.variantId ?? ''}`}>{i.message}</s-list-item>
         ))}
-      </List>
-    </Banner>
+      </s-unordered-list>
+    </s-banner>
   );
 }

@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Layout } from '@shopify/polaris';
 import { LOCATIONS } from '../data/catalog';
 import { sumUnits } from '../domain/stock';
 import { isKit, type UnitCounts, type Variant } from '../domain/types';
@@ -45,14 +44,10 @@ export function DisassembleView({ state, variants, simulateConflict, onStockChan
   };
 
   return (
-    <Layout>
-      {result && (
-        <Layout.Section>
-          <ResultBanner {...result} variantsById={state.variantsById} onDismiss={() => setResult(undefined)} />
-        </Layout.Section>
-      )}
-      <Layout.Section>
-        <div style={{ display: 'grid', gap: 16 }}>
+    <s-stack gap="base">
+      {result && <ResultBanner {...result} variantsById={state.variantsById} onDismiss={() => setResult(undefined)} />}
+      <s-grid gridTemplateColumns="2fr 1fr" gap="base" alignItems="start">
+        <s-stack gap="base">
           <KitFields
             heading="Where and what"
             stock={state.stock}
@@ -73,9 +68,7 @@ export function DisassembleView({ state, variants, simulateConflict, onStockChan
             counts={returned}
             onChange={setReturned}
           />
-        </div>
-      </Layout.Section>
-      <Layout.Section variant="oneThird">
+        </s-stack>
         <MixSummary
           heading="Units returned"
           progressLabel={`mini bars returned in total (needs exactly ${target})`}
@@ -86,7 +79,7 @@ export function DisassembleView({ state, variants, simulateConflict, onStockChan
           actionLabel="Break down kits"
           onAction={submit}
         />
-      </Layout.Section>
-    </Layout>
+      </s-grid>
+    </s-stack>
   );
 }

@@ -1,15 +1,11 @@
 import { useMemo, useState } from 'react';
-import { BlockStack, Page, Tabs } from '@shopify/polaris';
 import { INITIAL_VARIANTS, indexById, initialStock } from './data/catalog';
 import type { StockMap, Variant } from './domain/types';
 import { AssembleView } from './components/AssembleView';
 import { DemoControls } from './components/DemoControls';
 import { DisassembleView } from './components/DisassembleView';
 
-const TABS = [
-  { id: 'assemble', content: 'Assemble kits', panelID: 'assemble-panel' },
-  { id: 'disassemble', content: 'Disassemble kits', panelID: 'disassemble-panel' },
-];
+const TABS = ['Assemble kits', 'Disassemble kits'] as const;
 
 export function App() {
   const [tab, setTab] = useState(0);
@@ -28,9 +24,16 @@ export function App() {
   };
 
   return (
-    <Page title="Sampler kits" subtitle="Mockup - build kits from mini chocolate bar inventory">
-      <BlockStack gap="400">
-        <Tabs tabs={TABS} selected={tab} onSelect={setTab} />
+    <s-page heading="Sampler kits" inlineSize="large">
+      <s-stack gap="base">
+        <s-text color="subdued">Mockup - build kits from mini chocolate bar inventory</s-text>
+        <s-stack direction="inline" gap="small">
+          {TABS.map((label, i) => (
+            <s-button key={label} variant={tab === i ? 'primary' : 'secondary'} onClick={() => setTab(i)}>
+              {label}
+            </s-button>
+          ))}
+        </s-stack>
         {tab === 0 ? (
           <AssembleView
             key={`a-${resetKey}`}
@@ -50,7 +53,7 @@ export function App() {
           />
         )}
         <DemoControls simulateConflict={simulateConflict} onSimulateConflict={setSimulateConflict} onReset={reset} />
-      </BlockStack>
-    </Page>
+      </s-stack>
+    </s-page>
   );
 }

@@ -1,7 +1,7 @@
-import { BlockStack, Button, Card, InlineStack, Select, Text, TextField } from '@shopify/polaris';
 import { LOCATIONS } from '../data/catalog';
 import { availableAt } from '../domain/stock';
 import type { StockMap, Variant } from '../domain/types';
+import { fieldValue } from '../wc';
 
 interface Props {
   readonly heading: string;
@@ -18,34 +18,34 @@ interface Props {
 }
 
 export function KitFields(p: Props) {
-  const kitOptions = p.kits.map((k) => {
+  const kitLabel = (k: Variant) => {
     const n = availableAt(p.stock, k.id, p.locationId);
-    return { label: `${k.title} (${k.sku}) - ${n === null ? 'not stocked here' : `${n} in stock`}`, value: k.id };
-  });
+    return `${k.title} (${k.sku}) - ${n === null ? 'not stocked here' : `${n} in stock`}`;
+  };
+  // s-select does not refresh option labels when they change, so remount it when any label changes.
+  const kitSelectKey = p.kits.map(kitLabel).join('|');
   return (
-    <Card>
-      <BlockStack gap="300">
-        <Text as="h2" variant="headingMd">{p.heading}</Text>
-        <Select
-          label="Location"
-          options={LOCATIONS.map((l) => ({ label: l.name, value: l.id }))}
-          value={p.locationId}
-          onChange={p.onLocation}
-        />
-        <InlineStack gap="300" wrap={false} blockAlign="end">
-          <div style={{ flex: 3 }}>
-            <Select label="Kit" options={kitOptions} value={p.kitId} onChange={p.onKit} />
-          </div>
-          <div style={{ flex: 1 }}>
-            <TextField label={p.countLabel} type="number" min={1} autoComplete="off" value={p.kitCount} onChange={p.onKitCount} />
-          </div>
-        </InlineStack>
+    <s-section heading={p.heading}>
+      <s-stack gap="base">
+        <s-select label="Location" value={p.locationId} onInput={(e) => p.onLocation(fieldValue(e))}>
+          {LOCATIONS.map((l) => (
+            <s-option key={l.id} value={l.id}>{l.name}</s-option>
+          ))}
+        </s-select>
+        <s-grid gridTemplateColumns="3fr 1fr" gap="base">
+          <s-select key={kitSelectKey} label="Kit" value={p.kitId} onInput={(e) => p.onKit(fieldValue(e))}>
+            {p.kits.map((k) => (
+              <s-option key={k.id} value={k.id}>{kitLabel(k)}</s-option>
+            ))}
+          </s-select>
+          <s-number-field label={p.countLabel} min={1} value={p.kitCount} onInput={(e) => p.onKitCount(fieldValue(e))} />
+        </s-grid>
         {p.onCreateKit && (
-          <InlineStack>
-            <Button variant="plain" onClick={p.onCreateKit}>Create a new kit</Button>
-          </InlineStack>
+          <div>
+            <s-button variant="tertiary" onClick={p.onCreateKit}>Create a new kit</s-button>
+          </div>
         )}
-      </BlockStack>
-    </Card>
+      </s-stack>
+    </s-section>
   );
 }

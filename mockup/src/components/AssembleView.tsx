@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { Layout, Text } from '@shopify/polaris';
+import { useCallback, useState } from 'react';
 import { LOCATIONS } from '../data/catalog';
 import { maxBuildable, sumUnits } from '../domain/stock';
 import { isKit, type UnitCounts, type Variant } from '../domain/types';
@@ -41,6 +40,8 @@ export function AssembleView({ state, variants, simulateConflict, onStockChange,
   const target = kit?.kitSize ?? 0;
   const validCount = Number.isInteger(kitCount) && kitCount >= 1;
 
+  const closeModal = useCallback(() => setCreating(false), []);
+
   const submit = () => {
     const outcome = runAssembly(state, { kit, kitCount, perKit, locationId }, { simulateConflict });
     if (outcome.ok || outcome.kind === 'conflict') onStockChange(outcome.stock);
@@ -49,14 +50,10 @@ export function AssembleView({ state, variants, simulateConflict, onStockChange,
   };
 
   return (
-    <Layout>
-      {result && (
-        <Layout.Section>
-          <ResultBanner {...result} variantsById={state.variantsById} onDismiss={() => setResult(undefined)} />
-        </Layout.Section>
-      )}
-      <Layout.Section>
-        <div style={{ display: 'grid', gap: 16 }}>
+    <s-stack gap="base">
+      {result && <ResultBanner {...result} variantsById={state.variantsById} onDismiss={() => setResult(undefined)} />}
+      <s-grid gridTemplateColumns="2fr 1fr" gap="base" alignItems="start">
+        <s-stack gap="base">
           <KitFields
             heading="Where and what"
             stock={state.stock}
@@ -79,9 +76,7 @@ export function AssembleView({ state, variants, simulateConflict, onStockChange,
             onChange={setPerKit}
             demandMultiplier={validCount ? kitCount : 1}
           />
-        </div>
-      </Layout.Section>
-      <Layout.Section variant="oneThird">
+        </s-stack>
         <MixSummary
           heading="Mix per kit"
           progressLabel={`mini bars in each kit (needs exactly ${target})`}
@@ -89,25 +84,25 @@ export function AssembleView({ state, variants, simulateConflict, onStockChange,
           target={target}
           chosen={Object.entries(perKit).map(([id, n]) => [state.variantsById[id]?.title ?? id, n] as const)}
           extra={
-            <Text as="p" tone="subdued">
+            <s-text color="subdued">
               {`Max buildable with this mix at ${locationName}: ${maxBuildable(state.stock, perKit, locationId)}`}
-            </Text>
+            </s-text>
           }
           issues={issues}
           actionLabel={`Assemble ${validCount ? kitCount : ''} kit${kitCount === 1 ? '' : 's'}`.replace('  ', ' ')}
           onAction={submit}
         />
-      </Layout.Section>
+      </s-grid>
       <CreateKitModal
         open={creating}
         existing={variants}
-        onClose={() => setCreating(false)}
+        onClose={closeModal}
         onCreate={(k) => {
           onCreateKit(k);
           setKitId(k.id);
           setCreating(false);
         }}
       />
-    </Layout>
+    </s-stack>
   );
 }

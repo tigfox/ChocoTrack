@@ -61,14 +61,14 @@ Cloud Run, App Runner and App Platform are the lowest-effort options for a low-t
 
 ### Phase 0 - Clickable mockup for store-team feedback  *(built; awaiting feedback)*
 
-A standalone React + Vite + TypeScript app in `/mockup`, using real Polaris (React) components, fake data and no backend, served by nginx in Docker on this laptop (`docker compose up --build`, http://localhost:8080).
+A standalone React + Vite + TypeScript app in `/mockup`, using real Polaris web components (`s-*` elements from Shopify's CDN, typed with `@shopify/polaris-types`) in React 19, fake data and no backend, served by nginx in Docker on this laptop (`docker compose up --build`, http://localhost:8080).
 
 - Screens: Assemble, Disassemble, Create kit, and the result states (success, shortage, not stocked, stale-stock conflict).
-- Pure domain logic (`src/domain`) is unit-tested and is meant to carry over into the real app.
+- Pure domain logic (`src/domain`) is unit-tested and is meant to carry over into the real app. UI flows are covered by Playwright end-to-end tests in a real browser, since jsdom does not run the web components.
 - `mockup/WALKTHROUGH.md` holds the feedback scenarios and questions.
 - **Gate:** Phase 1 starts only after the store team signs off. Feedback changes go into the mockup first, then into this plan.
 
-Known caveat: `@shopify/polaris` (React) is deprecated in favor of Polaris web components. Fine for the mockup; choose the real app's UI library at Phase 1.
+Notes: the mockup page needs internet access to load Polaris from Shopify's CDN. It works standalone without App Bridge. `s-select` does not refresh option labels when they change, so the mockup remounts it when stock text changes; expect the same in the real app.
 
 ### Phase 1 - Shopify app scaffold
 
