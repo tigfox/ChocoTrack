@@ -11,7 +11,7 @@ A Shopify app that assembles "sampler kits" from mini chocolate bar inventory, u
 | Components | About 20 flavors of mini chocolate bar (the mockup uses 23 names taken from the River Sea Chocolates bar collection). Tracked in inventory, not sold individually. Any combination may go in a kit. |
 | Recipe | None stored. Components and quantities are chosen at each assembly run (the same mix is built N times per run). |
 | Kit SKU | An ordinary tracked variant. The app can create it or link an existing variant. |
-| Disassembly | Returned components are entered manually. The total must equal kit size x kits. |
+| Disassembly | The mini bars in one kit are entered manually (they must equal the kit size); returned stock is that mix x the number of kits. |
 | Locations | Multi-location. Every run happens at a chosen location. |
 | Component picker | Search by title, SKU or barcode (scanner-style Enter to add), with a collection filter (defaults to the mini-bar collection). |
 | Records | Shopify only: no app-side business tables. Adjustment `reason` and `referenceDocumentUri` form the audit trail in Shopify's inventory history. |
@@ -90,7 +90,7 @@ Wire the approved mockup screens to the service layer: location, kit pick/create
 
 ### Phase 5 - Disassemble UI
 
-Location, kit and quantity, then the returned mini bars with total validation.
+Location, kit and quantity, then the per-kit mini bar mix (multiplied by the kit count) with total validation.
 
 ### Phase 6 - Hardening
 
@@ -115,7 +115,6 @@ Public-app work (billing, GDPR webhooks, app review), lots and expiry, cost roll
 ## Open questions for the store team
 
 - Is one identical mix per run enough, or do they need different mixes per kit in a single run?
-- Should full-size bars ever be allowed as kit contents?
 - Is there a usual assembly location, or should the location be chosen every time?
 - Which option (AWS, GCP, DigitalOcean App Platform or Droplet), and who owns the account and deploys?
 - Is anything missing on screen (cost, low-stock flavors, a printable pick list)?

@@ -21,5 +21,5 @@ export const field = (page: Page, tag: string, label: string) => page.locator(`$
 
 export const openDisassemble = async (page: Page) => {
   await page.getByRole('button', { name: 'Disassemble kits' }).click();
-  await expect(page.getByRole('button', { name: 'Break down kits' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Break down 1 kit' })).toBeVisible();
 };

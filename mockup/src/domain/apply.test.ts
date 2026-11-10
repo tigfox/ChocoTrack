@@ -14,10 +14,18 @@ describe('assemblyChanges', () => {
 
 describe('disassemblyChanges', () => {
   it('removes kits and returns units', () => {
-    const changes = disassemblyChanges({ kit: kit6, kitCount: 1, returned: { [dark.id]: 6 }, locationId: MAIN });
+    const changes = disassemblyChanges({ kit: kit6, kitCount: 1, perKit: { [dark.id]: 6 }, locationId: MAIN });
     expect(changes).toEqual([
       { variantId: 'kit6', locationId: MAIN, delta: -1 },
       { variantId: 'dark', locationId: MAIN, delta: 6 },
+    ]);
+  });
+  it('multiplies the per-kit mix by the number of kits', () => {
+    const changes = disassemblyChanges({ kit: kit6, kitCount: 3, perKit: { [dark.id]: 4, [milk.id]: 2 }, locationId: MAIN });
+    expect(changes).toEqual([
+      { variantId: 'kit6', locationId: MAIN, delta: -3 },
+      { variantId: 'dark', locationId: MAIN, delta: 12 },
+      { variantId: 'milk', locationId: MAIN, delta: 6 },
     ]);
   });
 });

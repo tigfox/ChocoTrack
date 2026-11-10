@@ -10,7 +10,6 @@ export const COLLECTIONS: readonly Collection[] = [
   { id: 'c-mini', title: 'Mini bars (not sold individually)' },
   { id: 'c-dark', title: 'Dark chocolate' },
   { id: 'c-milk', title: 'Milk chocolate' },
-  { id: 'c-full', title: 'Full-size bars' },
 ];
 
 export const DEFAULT_COLLECTION_ID = 'c-mini';
@@ -54,16 +53,6 @@ const miniVariants: readonly Variant[] = MINI_ROWS.map(([name, extra], i) => ({
   collectionIds: ['c-mini', ...extra],
 }));
 
-const FULL_ROWS = ['Dark 85%', 'Milk Hazelnut', 'Caramel Sea Salt', 'Orange Dark'] as const;
-
-const fullVariants: readonly Variant[] = FULL_ROWS.map((name, i) => ({
-  id: `v-full-${slug(name)}`,
-  title: `Full bar - ${name}`,
-  sku: `BAR-${slug(name).toUpperCase()}`,
-  barcode: `8500200${String(i + 1).padStart(5, '0')}`,
-  collectionIds: ['c-full'],
-}));
-
 export const KIT_6: Variant = {
   id: 'v-kit-smp-6',
   title: 'Sampler Kit - 6 Pack',
@@ -82,7 +71,7 @@ export const KIT_12: Variant = {
   kitSize: 12,
 };
 
-export const INITIAL_VARIANTS: readonly Variant[] = [...miniVariants, ...fullVariants, KIT_6, KIT_12];
+export const INITIAL_VARIANTS: readonly Variant[] = [...miniVariants, KIT_6, KIT_12];
 
 const locationIds = LOCATIONS.map((l) => l.id);
 
@@ -93,7 +82,6 @@ const stockLine = (quantities: readonly (number | null)[]): Readonly<Record<stri
 
 export const initialStock = (): StockMap => ({
   ...Object.fromEntries(MINI_ROWS.map(([, , ...q], i) => [(miniVariants[i] as Variant).id, stockLine(q)])),
-  ...Object.fromEntries(FULL_ROWS.map((_, i) => [(fullVariants[i] as Variant).id, stockLine([50, 20, null])])),
   [KIT_6.id]: stockLine([12, 0, null]),
   [KIT_12.id]: stockLine([5, null, null]),
 });

@@ -19,7 +19,7 @@ Run `docker compose up --build` and open http://localhost:8080. Try each scenari
 1. Choose Sampler Kit - 12 Pack and build a mix of 12.
 
 ## 5. Break kits down
-1. Disassemble tab: break down 1 x 6-pack and enter the 6 mini bars returned.
+1. Disassemble tab: set kits to break down to 2, enter the 6 mini bars in one kit, and check that the summary says 12 mini bars are returned.
 
 ## 6. Stock changes underneath you
 1. Tick "Simulate: stock changes..." in Mockup controls, try to assemble, and read the message.
@@ -29,7 +29,6 @@ Run `docker compose up --build` and open http://localhost:8080. Try each scenari
 
 ## Questions
 - Is assembling the same mix for N kits at once what you need, or do you need a different mix per kit in one go?
-- Should the full-size bars ever be allowed as kit contents, or only mini bars (the default filter)?
 - Is a location picker on every action right, or is there a usual "assembly" location?
 - Any information missing on screen (cost, flavors low on stock, a print-friendly pick list)?
 - Anything confusing about the wording?

@@ -47,7 +47,7 @@ export const runAssembly = (
 
 export const runDisassembly = (
   state: WorkspaceState,
-  req: { kit: Variant | undefined; kitCount: number; returned: UnitCounts; locationId: string },
+  req: { kit: Variant | undefined; kitCount: number; perKit: UnitCounts; locationId: string },
   { simulateConflict }: RunOptions,
 ): Outcome => {
   const issues = validateDisassembly({ ...state, ...req });

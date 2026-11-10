@@ -50,16 +50,24 @@ describe('validateAssembly', () => {
 });
 
 describe('validateDisassembly', () => {
-  const ok = { ...base, kit: kit6, kitCount: 2, returned: { [dark.id]: 8, [milk.id]: 4 } };
+  const ok = { ...base, kit: kit6, kitCount: 2, perKit: { [dark.id]: 4, [milk.id]: 2 } };
 
   it('accepts a valid disassembly', () => {
     expect(validateDisassembly(ok)).toEqual([]);
   });
-  it('requires returned units to equal kit size x kit count', () => {
-    expect(codes(validateDisassembly({ ...ok, returned: { [dark.id]: 8 } }))).toContain('WRONG_UNIT_TOTAL');
+  it('requires the per-kit mix to equal the kit size, regardless of kit count', () => {
+    const issues = validateDisassembly({ ...ok, kitCount: 3, perKit: { [dark.id]: 4 } });
+    expect(codes(issues)).toEqual(['WRONG_UNIT_TOTAL']);
+    expect(issues[0]?.message).toMatch(/4 of 6/);
+  });
+  it('requires at least one unit', () => {
+    expect(codes(validateDisassembly({ ...ok, perKit: {} }))).toContain('NO_UNITS');
+  });
+  it('rejects a bad kit count', () => {
+    expect(codes(validateDisassembly({ ...ok, kitCount: 0 }))).toContain('BAD_KIT_COUNT');
   });
   it('cannot break down more kits than are in stock', () => {
-    const issues = validateDisassembly({ ...ok, kitCount: 5, returned: { [dark.id]: 30 } });
+    const issues = validateDisassembly({ ...ok, kitCount: 5 });
     expect(codes(issues)).toContain('INSUFFICIENT_STOCK');
   });
   it('treats a kit not stocked at the location as insufficient', () => {
@@ -70,8 +78,12 @@ describe('validateDisassembly', () => {
       expect.arrayContaining(['NO_KIT', 'NO_LOCATION']),
     );
   });
+  it('rejects non-integer unit counts', () => {
+    expect(codes(validateDisassembly({ ...ok, perKit: { [dark.id]: 1.5 } }))).toContain('INVALID_QUANTITY');
+  });
   it('flags returning units to a location where the component is not stocked', () => {
-    const issues = validateDisassembly({ ...ok, locationId: MAIN, returned: { [dark.id]: 8, 'ghost': 4 }, variantsById: { ...variantsById, ghost: { ...mint, id: 'ghost', title: 'Ghost' } } });
+    const ghost = { ...mint, id: 'ghost', title: 'Ghost' };
+    const issues = validateDisassembly({ ...ok, perKit: { [dark.id]: 4, ghost: 2 }, variantsById: { ...variantsById, ghost } });
     expect(codes(issues)).toContain('NOT_STOCKED');
   });
 });

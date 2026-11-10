@@ -26,7 +26,7 @@ npm run test:e2e   # Playwright UI flows in a real browser (CHROME_CHANNEL=chrom
 ## What's in the mockup
 
 - **Assemble kits** - pick a location, a kit (6-pack or 12-pack) and a number of kits, then choose which mini bars go in each kit. The mix must add up to exactly the kit size. Live "max buildable" and shortage warnings.
-- **Disassemble kits** - break kits back into mini bars; the units returned must equal kit size x kits.
+- **Disassemble kits** - break kits back into mini bars; enter the mini bars in one kit (they must add up to the kit size) and the app multiplies by the number of kits.
 - **Create a new kit** - from the Assemble tab.
 - **Mockup controls** (bottom) - reset the fake data, or simulate stock changing just before you submit.
 
@@ -35,6 +35,6 @@ Everything resets when the page reloads. See `WALKTHROUGH.md` for a guided feedb
 ## Layout
 
 - `src/domain` - pure, tested business rules (carried over into the real app)
-- `src/data` - fake catalog: 23 mini flavors named after the River Sea Chocolates bars, 4 full bars, 2 kits, 3 locations
+- `src/data` - fake catalog: 23 mini flavors named after the River Sea Chocolates bars, 2 kits, 3 locations
 - `src/components` - UI built from `s-*` Polaris web components
 - `e2e` - Playwright tests of the full flows

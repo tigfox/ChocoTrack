@@ -27,19 +27,20 @@ export function DisassembleView({ state, variants, simulateConflict, onStockChan
   const [locationId, setLocationId] = useState(LOCATIONS[0]?.id ?? '');
   const [kitId, setKitId] = useState(kits[0]?.id ?? '');
   const [kitCountRaw, setKitCountRaw] = useState('1');
-  const [returned, setReturned] = useState<UnitCounts>({});
+  const [perKit, setPerKit] = useState<UnitCounts>({});
   const [result, setResult] = useState<Result | undefined>();
 
   const kit = state.variantsById[kitId];
   const kitCount = Number(kitCountRaw);
-  const issues = validateDisassembly({ ...state, locationId, kit, kitCount, returned });
+  const issues = validateDisassembly({ ...state, locationId, kit, kitCount, perKit });
   const locationName = LOCATIONS.find((l) => l.id === locationId)?.name ?? '';
-  const target = kit?.kitSize !== undefined && Number.isInteger(kitCount) && kitCount >= 1 ? kit.kitSize * kitCount : 0;
+  const target = kit?.kitSize ?? 0;
+  const validCount = Number.isInteger(kitCount) && kitCount >= 1;
 
   const submit = () => {
-    const outcome = runDisassembly(state, { kit, kitCount, returned, locationId }, { simulateConflict });
+    const outcome = runDisassembly(state, { kit, kitCount, perKit, locationId }, { simulateConflict });
     if (outcome.ok || outcome.kind === 'conflict') onStockChange(outcome.stock);
-    if (outcome.ok) setReturned({});
+    if (outcome.ok) setPerKit({});
     setResult({ outcome, locationName, label: `Disassembled ${kitCount} x ${kit?.title ?? 'kit'}` });
   };
 
@@ -61,22 +62,27 @@ export function DisassembleView({ state, variants, simulateConflict, onStockChan
             countLabel="Kits to break down"
           />
           <FlavorPicker
-            heading="Enter the mini bars being returned to stock"
+            heading={`Choose the mini bars in each ${kit?.title ?? 'kit'} being broken down`}
             variants={variants}
             stock={state.stock}
             locationId={locationId}
-            counts={returned}
-            onChange={setReturned}
+            counts={perKit}
+            onChange={setPerKit}
           />
         </s-stack>
         <MixSummary
-          heading="Units returned"
-          progressLabel={`mini bars returned in total (needs exactly ${target})`}
-          units={sumUnits(returned)}
+          heading="Mix per kit"
+          progressLabel={`mini bars in each kit (needs exactly ${target})`}
+          units={sumUnits(perKit)}
           target={target}
-          chosen={Object.entries(returned).map(([id, n]) => [state.variantsById[id]?.title ?? id, n] as const)}
+          chosen={Object.entries(perKit).map(([id, n]) => [state.variantsById[id]?.title ?? id, n] as const)}
+          extra={
+            <s-text color="subdued">
+              {`Returns ${validCount ? sumUnits(perKit) * kitCount : 0} mini bars to stock at ${locationName}`}
+            </s-text>
+          }
           issues={issues}
-          actionLabel="Break down kits"
+          actionLabel={`Break down ${validCount ? kitCount : ''} kit${kitCount === 1 ? '' : 's'}`.replace('  ', ' ')}
           onAction={submit}
         />
       </s-grid>

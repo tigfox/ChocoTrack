@@ -14,7 +14,8 @@ export interface AssemblyInput extends Common {
 }
 
 export interface DisassemblyInput extends Common {
-  readonly returned: UnitCounts;
+  /** Mini bars in ONE kit being broken down; returned stock is this x kitCount. */
+  readonly perKit: UnitCounts;
 }
 
 const issue = (code: ValidationIssue['code'], message: string, variantId?: string): ValidationIssue =>
@@ -67,16 +68,17 @@ export const validateAssembly = (input: AssemblyInput): readonly ValidationIssue
 
 export const validateDisassembly = (input: DisassemblyInput): readonly ValidationIssue[] => {
   const base = baseIssues(input);
-  const { kit, kitCount, returned, stock, locationId, variantsById } = input;
-  const quantity = quantityIssues(returned, variantsById);
+  const { kit, kitCount, perKit, stock, locationId, variantsById } = input;
+  const quantity = quantityIssues(perKit, variantsById);
   const validCount = Number.isInteger(kitCount) && kitCount >= 1;
-  const total = kit?.kitSize === undefined || !validCount ? [] : totalIssues(returned, kit.kitSize * kitCount, `${kitCount} kit(s)`);
+  const total = kit?.kitSize === undefined ? [] : totalIssues(perKit, kit.kitSize, 'Each kit');
+  const kitAvailable = kit && locationId ? (availableAt(stock, kit.id, locationId) ?? 0) : 0;
   const kitStock =
-    kit && locationId && validCount && kitCount > (availableAt(stock, kit.id, locationId) ?? 0)
-      ? [issue('INSUFFICIENT_STOCK', `Only ${availableAt(stock, kit.id, locationId) ?? 0} ${kit.title} available here; ${kitCount} to break down.`, kit.id)]
+    kit && locationId && validCount && kitCount > kitAvailable
+      ? [issue('INSUFFICIENT_STOCK', `Only ${kitAvailable} ${kit.title} available here; ${kitCount} to break down.`, kit.id)]
       : [];
   const stockIssues = locationId
-    ? positiveEntries(returned)
+    ? positiveEntries(perKit)
         .filter(([id]) => availableAt(stock, id, locationId) === null)
         .map(([id]) => notStocked(input, id))
     : [];

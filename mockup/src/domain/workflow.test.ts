@@ -30,7 +30,7 @@ describe('runAssembly', () => {
 });
 
 describe('runDisassembly', () => {
-  const dis = { kit: kit6, kitCount: 1, returned: { [dark.id]: 3, [milk.id]: 3 }, locationId: MAIN };
+  const dis = { kit: kit6, kitCount: 1, perKit: { [dark.id]: 3, [milk.id]: 3 }, locationId: MAIN };
   it('returns kits to components', () => {
     const out = runDisassembly(state(), dis, { simulateConflict: false });
     expect(out.ok).toBe(true);
@@ -38,8 +38,16 @@ describe('runDisassembly', () => {
     expect(out.stock.kit6?.[MAIN]).toBe(3);
     expect(out.stock.dark?.[MAIN]).toBe(23);
   });
+  it('multiplies the per-kit mix by the kit count', () => {
+    const out = runDisassembly(state(), { ...dis, kitCount: 2 }, { simulateConflict: false });
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.stock.kit6?.[MAIN]).toBe(2);
+    expect(out.stock.dark?.[MAIN]).toBe(26);
+    expect(out.stock.milk?.[MAIN]).toBe(16);
+  });
   it('rejects invalid input', () => {
-    const out = runDisassembly(state(), { ...dis, returned: {} }, { simulateConflict: false });
+    const out = runDisassembly(state(), { ...dis, perKit: {} }, { simulateConflict: false });
     expect(out.ok).toBe(false);
   });
   it('simulates a conflict', () => {

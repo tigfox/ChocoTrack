@@ -18,14 +18,14 @@ export const assemblyChanges = (a: {
 export const disassemblyChanges = (a: {
   kit: Variant;
   kitCount: number;
-  returned: UnitCounts;
+  perKit: UnitCounts;
   locationId: string;
 }): readonly InventoryChange[] => [
   { variantId: a.kit.id, locationId: a.locationId, delta: -a.kitCount },
-  ...positiveEntries(a.returned).map(([variantId, qty]) => ({
+  ...positiveEntries(a.perKit).map(([variantId, qty]) => ({
     variantId,
     locationId: a.locationId,
-    delta: qty,
+    delta: qty * a.kitCount,
   })),
 ];
 
