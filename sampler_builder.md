@@ -2,6 +2,25 @@
 
 A Shopify app that assembles "sampler kits" from mini chocolate bar inventory, using the Admin GraphQL [`InventoryItem`](https://shopify.dev/docs/api/admin-graphql/latest/objects/InventoryItem) and inventory adjustment APIs.
 
+## Status (2026-11-10)
+
+**Built and working in the dev store (`creeklakeconfections`):** Assemble, Disassemble, Settings (kits and categories), search with collection filter, printable pick list, finished-box preview with product images, remembered location, kit and collection, and error handling for dropped connections and stale stock. The mockup is frozen.
+
+**Checks:** 277 unit tests (99.8% statements, 100% lines; gate is 80%), typecheck, lint and build clean, an opt-in live test against the dev store, and 17 browser tests (`npm run test:e2e`). CI on GitHub passes on every push to `main` with pinned action versions.
+
+| Phase | State |
+|---|---|
+| 0 Mockup | Done, signed off, frozen |
+| 1-3 Scaffold, domain, Shopify service layer | Done |
+| 4, 4b, 4c Assemble UI, pick list, box image | Done |
+| 5 Disassemble UI | Done |
+| 6 Hardening | Done (see below for what stays open) |
+| Feedback round 2 (Settings page, kit categories) | Done |
+| Error and edge-case pass | Done |
+| 7 Deploy | Files built and tested locally; **blocked on the store team** (Droplet, hostname, GitHub secrets, production Shopify app) |
+
+**Next, in order:** (1) store team provisions the Droplet and gives the hostname, then the production-readiness pass (real URLs, webhook version, `shopify app deploy --config production`); (2) optional fake-Shopify browser suite in CI; (3) confirm with the store team whether the screens now feel faster, then talk about deferred features.
+
 ## Decisions
 
 | Area | Decision |
@@ -21,6 +40,8 @@ A Shopify app that assembles "sampler kits" from mini chocolate bar inventory, u
 | Stack | Shopify CLI React Router template (TypeScript, Polaris, App Bridge). Prisma only for OAuth session storage. |
 | Distribution | Built for one store; no hardcoded shop so it can go public later. |
 | Hosting | **Initial: one small DigitalOcean Droplet** (Docker Compose, Caddy for HTTPS, SQLite sessions on disk; runbook in `deploy/droplet/`). May move to a larger platform (AWS, GCP, App Platform) if the app grows; the container stays portable (see Hosting). |
+| Kit settings | A Settings page lists the kits and edits name, size and optional category; it also creates kits. Price, SKU and barcode stay in Shopify. |
+| Kit category | Optional, one per kit, an existing store collection, kept in the `choco_track.category` metafield on the kit product. Assembling or disassembling that kit starts the mini-bar list on it. |
 | Deferred | Lots and expiry dates, cost rollup, templates, audit/history UI. |
 
 ## Key design points
@@ -32,7 +53,7 @@ A Shopify app that assembles "sampler kits" from mini chocolate bar inventory, u
 5. **Search.** `productVariants(query:)` with `sku:` and `barcode:` filters plus collection filtering. Inventory levels come from `inventoryItem.inventoryLevels`.
 6. **Scopes.** `read_products`, `write_products`, `read_inventory`, `write_inventory`, `read_locations`.
 
-## Hosting (AWS, GCP or DigitalOcean - pending store-team decision)
+## Hosting (decided: a DigitalOcean Droplet to start; the options below were the comparison)
 
 The app is a stateless Node web server plus a small database for Shopify OAuth sessions only (kit data lives in Shopify). That keeps every option below simple.
 
@@ -130,15 +151,16 @@ Location, kit and quantity, then the per-kit mini bar mix (multiplied by the kit
 
 ### Phase 6 - Hardening
 
-Playwright E2E tests on the dev store, security review, error and empty states, README.
+Browser tests on the dev store, security review, error and empty states, README.
 
 *Done so far:* independent security review (no critical or high findings) and the fixes it raised: a request whose "kit" is not a real kit, or lists the kit as its own component, is refused; activation of stock levels is decided from live Shopify data (the browser snapshot is only the stale-stock guard); duplicate-SKU check when creating a kit; request body capped at 64 KB and mix size limited; search operators stripped; error logging reduced to name and message; `.dockerignore` extended; dev MCP pinned. Also: "Show more" search paging (up to 250), empty states, mandatory privacy webhooks (take effect on `shopify app deploy`), Dependabot config, root README. The live test now runs through the real server handler, including a stale-snapshot refusal.
 
+*Resolved since:* browser tests now exist (`choco-track/e2e/`, Playwright attached to a signed-in Chrome over a debugging port; run with `npm run test:e2e`, see `e2e/README.md`; not part of CI because they need a signed-in session). The container runs as a non-root user.
+
 *Still open:*
-- Browser (Playwright) tests against the embedded app: they need a logged-in Shopify admin session, so they are manual for now (see the check list in the README).
-- Run the container as a non-root user when the database moves to PostgreSQL (Phase 7); today's SQLite file needs write access.
 - Per-shop rate limiting, if the app goes public.
 - Confirm `application_url`, redirect URLs and webhook `api_version` (`2027-01` from the template) at deploy.
+- Optional: a fake-Shopify browser suite so UI behavior is also checked in CI.
 
 ### Store-team feedback round 2 (Done)
 
@@ -151,7 +173,7 @@ Playwright E2E tests on the dev store, security review, error and empty states, 
 
 - **Dropped connection:** a lost network during a submit, a settings save or a search used to replace the whole page with an "Application Error" and lose the mix. These calls now go through `fetchJson` (JSON routes under `/app/api/`), so the failure shows next to the work. A submit that cannot be confirmed keeps the mix and the run id, so retrying is safe and applies once.
 - **Shopify errors around a run:** a failure while reading the catalog before a run is now an error result, not an exception; a failed stock refresh after a successful run no longer makes the success look like a failure.
-- Bug found by the new tests' neighbours: `inventoryActivate` needs an idempotency key in API 2026-07 (brand-new kits could not be assembled).
+- Related fix: `inventoryActivate` needs an idempotency key in API 2026-07, so brand-new kits could not be assembled at a location they were not yet stocked at. A live regression test now creates, assembles, disassembles and deletes a throwaway kit.
 - Browser tests added for: dropped connection (submit, settings, search), stale stock changed in Shopify, bar not stocked at a location, more kits than stock allows, duplicate SKU.
 
 ### Phase 7 - Deploy  *(files built and tested locally; waiting on the Droplet, hostname and GitHub secrets)*
@@ -161,7 +183,7 @@ Target: a small DigitalOcean Droplet. Everything is in `deploy/droplet/` with a 
 - **Image:** `choco-track/Dockerfile` runs as a non-root user, keeps the SQLite session database on a mounted `/data` volume, runs `prisma migrate deploy` on start, and has a healthcheck on `GET /healthz`. Built and run locally with placeholder Shopify values: migrations applied, health 200, container reported healthy.
 - **Stack:** `docker-compose.yml` (app plus Caddy with automatic HTTPS), `Caddyfile`, `.env.example`. Compose and Caddy configs validated.
 - **Server scripts:** `bootstrap.sh` (Docker, firewall, fail2ban, unattended upgrades, swap, `deploy` user), `deploy.sh` (pull, restart, wait for healthy; also rolls back by tag), `backup.sh` (daily SQLite backup, 14 days).
-- **CI/CD:** `.github/workflows/ci.yml` runs typecheck, lint, tests and build for the app, tests for the mockup, then on `main` builds and pushes `ghcr.io/tigfox/chocotrack:<sha>` and deploys over SSH (skipped until the Droplet secrets exist).
+- **CI/CD:** `.github/workflows/ci.yml` runs typecheck, lint, tests with the coverage gate and build for the app, then on `main` builds and pushes `ghcr.io/tigfox/chocotrack:<sha>` and deploys over SSH (skipped until the Droplet secrets exist).
 - **Database decision:** SQLite on the Droplet for now. It holds only OAuth sessions, so a separate PostgreSQL server would only use memory on a small VM. Moving to a platform without a persistent disk means switching the Prisma datasource to PostgreSQL; sessions are disposable, so no data migration.
 - **Left to do (needs the store team):** create the Droplet and hostname, add the four GitHub secrets, make the image package public, fill in `.env`, then `shopify app config link` and `shopify app deploy` for the production URLs.
 
