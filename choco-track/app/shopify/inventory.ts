@@ -55,15 +55,15 @@ export const loadStock = async (client: GraphqlClient, variantIds: readonly stri
 };
 
 const ACTIVATE_MUTATION = `#graphql
-  mutation Activate($inventoryItemId: ID!, $locationId: ID!) {
-    inventoryActivate(inventoryItemId: $inventoryItemId, locationId: $locationId) {
+  mutation Activate($inventoryItemId: ID!, $locationId: ID!, $key: String!) {
+    inventoryActivate(inventoryItemId: $inventoryItemId, locationId: $locationId) @idempotent(key: $key) {
       inventoryLevel { id }
       userErrors { field message }
     }
   }
 `;
 
-/** Stocks an item at a location (at 0) so it can be adjusted. */
+/** Stocks an item at a location (at 0) so it can be adjusted. API 2026-07 requires an idempotency key here. */
 export const activateInventory = async (
   client: GraphqlClient,
   inventoryItemId: string,
@@ -72,6 +72,7 @@ export const activateInventory = async (
   const data = await client<{ inventoryActivate: { userErrors: readonly UserError[] } }>(ACTIVATE_MUTATION, {
     inventoryItemId,
     locationId,
+    key: crypto.randomUUID(),
   });
   assertNoUserErrors('Activate inventory', data.inventoryActivate.userErrors);
 };

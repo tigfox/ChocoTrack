@@ -23,10 +23,22 @@ describe('loadStock', () => {
 });
 
 describe('activateInventory', () => {
-  it('sends item and location', async () => {
+  it('sends item and location with an idempotency key', async () => {
     const client = fakeClient({ inventoryActivate: { userErrors: [] } });
     await activateInventory(client, 'i1', 'L1');
-    expect(client.calls[0]?.variables).toEqual({ inventoryItemId: 'i1', locationId: 'L1' });
+    expect(client.calls[0]?.variables).toEqual({ inventoryItemId: 'i1', locationId: 'L1', key: expect.any(String) });
+  });
+  it('uses the @idempotent directive, which API 2026-07 requires on this mutation', async () => {
+    const client = fakeClient({ inventoryActivate: { userErrors: [] } });
+    await activateInventory(client, 'i1', 'L1');
+    expect(client.calls[0]?.query).toMatch(/inventoryActivate\([^)]*\)\s*@idempotent\(key: \$key\)/);
+    expect(client.calls[0]?.query).toContain('$key: String!');
+  });
+  it('uses a fresh key each time', async () => {
+    const client = fakeClient({ inventoryActivate: { userErrors: [] } }, { inventoryActivate: { userErrors: [] } });
+    await activateInventory(client, 'i1', 'L1');
+    await activateInventory(client, 'i1', 'L1');
+    expect(client.calls[0]?.variables?.key).not.toBe(client.calls[1]?.variables?.key);
   });
   it('throws on user errors', async () => {
     const client = fakeClient({ inventoryActivate: { userErrors: [{ message: 'nope' }] } });
@@ -90,7 +102,7 @@ describe('ensureStocked', () => {
     const client = fakeClient({ inventoryActivate: { userErrors: [] } });
     const stock = await ensureStocked(client, request.changes, request.inventoryItemIds, { v1: { L1: 20 } });
     expect(client.calls).toHaveLength(1);
-    expect(client.calls[0]?.variables).toEqual({ inventoryItemId: 'ik', locationId: 'L1' });
+    expect(client.calls[0]?.variables).toMatchObject({ inventoryItemId: 'ik', locationId: 'L1' });
     expect(stock).toEqual({ v1: { L1: 20 }, kit: { L1: 0 } });
   });
   it('does nothing when everything is stocked', async () => {

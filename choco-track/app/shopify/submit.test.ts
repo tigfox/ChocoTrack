@@ -52,7 +52,7 @@ describe('submitRun', () => {
     const result = await submitRun(client, base({ stock: { a: { L1: 20 }, b: { L1: 20 } } }));
     expect(result.ok).toBe(true);
     expect(client.calls).toHaveLength(2);
-    expect(client.calls[0]?.variables).toEqual({ inventoryItemId: 'item-kit', locationId: 'L1' });
+    expect(client.calls[0]?.variables).toMatchObject({ inventoryItemId: 'item-kit', locationId: 'L1' });
   });
   it('validates before calling Shopify', async () => {
     const client = fakeClient();
@@ -89,7 +89,7 @@ describe('submitRun', () => {
     const stock = { a: { L1: 20 }, b: { L1: 20 } };
     const result = await submitRun(client, base({ stock, liveStock: stock }));
     expect(result.ok).toBe(true);
-    expect(client.calls[0]?.variables).toEqual({ inventoryItemId: 'item-kit', locationId: 'L1' });
+    expect(client.calls[0]?.variables).toMatchObject({ inventoryItemId: 'item-kit', locationId: 'L1' });
   });
   it('does not activate a level that exists live even if the snapshot omits it', async () => {
     const client = fakeClient(ok);

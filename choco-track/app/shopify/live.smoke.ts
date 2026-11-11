@@ -2,6 +2,7 @@
 // Reads the catalog, then assembles and disassembles one kit (net stock change: zero).
 import { execFileSync } from 'node:child_process';
 import { listCollections, listKits, searchVariants } from './catalog';
+import { createKit } from './kits';
 import type { GraphqlClient } from './client';
 import { ShopifyApiError } from './errors';
 import { loadStock } from './inventory';
@@ -31,7 +32,7 @@ describe.skipIf(!store)('live dev store', () => {
     const kitList = kits.variants;
     expect(locations.map((l) => l.name)).toEqual(expect.arrayContaining(['Warehouse', 'Market Store']));
     expect(collections.map((c) => c.title)).toContain('Mini bars (not sold individually)');
-    expect(kitList.map((k) => [k.sku, k.kitSize]).sort()).toEqual([['SMP-12', 12], ['SMP-4', 4], ['SMP-5', 5], ['SMP-6', 6]]);
+    expect(kitList.map((k) => [k.sku, k.kitSize])).toEqual(expect.arrayContaining([['SMP-12', 12], ['SMP-4', 4], ['SMP-5', 5], ['SMP-6', 6]]));
     expect(minis.variants.map((m) => m.sku)).toContain('MINI-RUM-CARAMEL');
     // Product images come through for the box preview and the pick list (seed with scripts/upload-dev-images.mjs).
     expect(minis.variants.every((m) => m.imageUrl?.startsWith('https://cdn.shopify.com/'))).toBe(true);
@@ -72,4 +73,40 @@ describe.skipIf(!store)('live dev store', () => {
     expect(disassembled.result).toMatchObject({ ok: true });
     expect(await loadStock(cliClient, ids)).toEqual(before);
   }, 180_000);
+
+  // Regression: a brand-new kit has no inventory level at the chosen location, so assembling must activate it
+  // (API 2026-07 requires an idempotency key on inventoryActivate).
+  it('assembles and disassembles a brand-new kit, then deletes it', async () => {
+    const [locations, minis] = await Promise.all([listLocations(cliClient), searchVariants(cliClient, { text: 'MINI-', first: 4 })]);
+    const warehouse = locations.find((l) => l.name === 'Warehouse');
+    if (!warehouse) throw new Error('seed data missing');
+    const sku = `LIVE-TEST-${Date.now()}`;
+    const kit = await createKit(cliClient, { title: `Live test ${sku}`, size: 4, sku });
+    const productId = await cliClient<{ productVariant: { product: { id: string } } }>(
+      'query($id: ID!) { productVariant(id: $id) { product { id } } }',
+      { id: kit.id },
+    ).then((d) => d.productVariant.product.id);
+    try {
+      const perKit = Object.fromEntries(minis.variants.map((m) => [m.id, 1]));
+      const ids = [kit.id, ...minis.variants.map((m) => m.id)];
+      const before = await loadStock(cliClient, ids);
+      const run = (mode: 'assemble' | 'disassemble', seenStock: StockMap) =>
+        handleRun(
+          cliClient,
+          { mode, kitId: kit.id, kitCount: 1, locationId: warehouse.id, perKit, seenStock, runId: crypto.randomUUID() },
+          mode,
+        );
+      expect((await run('assemble', Object.fromEntries(ids.map((id) => [id, before[id] ?? {}])))).result).toMatchObject({ ok: true });
+      const mid = await loadStock(cliClient, ids);
+      expect(mid[kit.id]?.[warehouse.id]).toBe(1);
+      expect((await run('disassemble', mid)).result).toMatchObject({ ok: true });
+      const after = await loadStock(cliClient, ids);
+      expect(after[kit.id]?.[warehouse.id]).toBe(0);
+      expect(minis.variants.map((m) => after[m.id]?.[warehouse.id])).toEqual(minis.variants.map((m) => before[m.id]?.[warehouse.id]));
+    } finally {
+      await cliClient('mutation($input: ProductDeleteInput!) { productDelete(input: $input) { deletedProductId userErrors { message } } }', {
+        input: { id: productId },
+      });
+    }
+  }, 240_000);
 });
