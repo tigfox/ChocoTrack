@@ -32,6 +32,12 @@ node scripts/seed-dev-store.mjs <store>.myshopify.com
 
 It expects locations named Warehouse, Market Store and Cafe, and skips SKUs that already exist.
 
+Optionally add the name-only product pictures (so the box preview and printed pick list show images):
+
+```bash
+node scripts/upload-dev-images.mjs <store>.myshopify.com   # skips products that already have media
+```
+
 ## Checks
 
 ```bash

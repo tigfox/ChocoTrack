@@ -33,6 +33,8 @@ describe.skipIf(!store)('live dev store', () => {
     expect(collections.map((c) => c.title)).toContain('Mini bars (not sold individually)');
     expect(kitList.map((k) => [k.sku, k.kitSize]).sort()).toEqual([['SMP-12', 12], ['SMP-4', 4], ['SMP-5', 5], ['SMP-6', 6]]);
     expect(minis.variants.map((m) => m.sku)).toContain('MINI-RUM-CARAMEL');
+    // Product images come through for the box preview and the pick list (seed with scripts/upload-dev-images.mjs).
+    expect(minis.variants.every((m) => m.imageUrl?.startsWith('https://cdn.shopify.com/'))).toBe(true);
   }, 60_000);
 
   it('assembles then disassembles one 4-pack, restoring stock', async () => {
