@@ -74,17 +74,13 @@ Check it: `curl https://<APP_DOMAIN>/healthz` should print `ok`.
 
 ### 7. Point Shopify at the app
 
-The repo's `shopify.app.toml` still has placeholder URLs from local development. Create a production config and release it:
+The dev app (`shopify.app.toml`) rewrites its URLs every time someone runs `shopify app dev`, so production uses its own Shopify app. A template with everything pre-filled is in `choco-track/shopify.app.production.toml.example`:
 
-```bash
-cd choco-track
-shopify app config link          # create/choose a production config, e.g. "production"
-# edit shopify.app.production.toml: application_url = "https://<APP_DOMAIN>"
-#   and auth.redirect_urls = ["https://<APP_DOMAIN>/api/auth"]
-shopify app deploy               # releases URLs, scopes and the webhook subscriptions
-```
-
-Then install or re-open the app on the store from the Dev Dashboard. `shopify app deploy` is also what activates the mandatory privacy webhooks and any scope changes.
+1. In the Dev Dashboard, create a second app (for example "ChocoTrack Production").
+2. `cd choco-track && shopify app config link`, choose that app and name the config `production`. This writes `shopify.app.production.toml` with the real `client_id`.
+3. Make it match the template: set `application_url` and the redirect URL to `https://<APP_DOMAIN>`, keep the scopes and webhooks identical to `shopify.app.toml`, and set `automatically_update_urls_on_dev = false`.
+4. `shopify app deploy --config production` releases the URLs, scopes and webhook subscriptions (including the mandatory privacy webhooks).
+5. Copy the production app's API key and secret into the Droplet's `.env`, run `./deploy.sh`, then install the app on the store from the Dev Dashboard.
 
 ## Day to day
 

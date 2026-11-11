@@ -1,0 +1,40 @@
+# Production configuration template. See deploy/droplet/README.md, step 7.
+#
+# 1. In the Dev Dashboard create a second app for production (for example "ChocoTrack Production").
+#    The dev app rewrites its URLs on every `shopify app dev`, so production needs its own app.
+# 2. Run `shopify app config link`, choose the production app and name the config "production".
+#    That writes shopify.app.production.toml with the real client_id.
+# 3. Make it match this file: replace APP_DOMAIN below, keep the scopes and webhooks identical to
+#    shopify.app.toml, and set automatically_update_urls_on_dev = false.
+# 4. `shopify app deploy --config production`, then put the production API key and secret in the
+#    Droplet's .env.
+
+client_id = "REPLACE_WITH_PRODUCTION_CLIENT_ID"
+name = "ChocoTrack"
+application_url = "https://APP_DOMAIN"
+embedded = true
+
+[access_scopes]
+scopes = "read_products,write_products,read_inventory,write_inventory,read_locations"
+
+[webhooks]
+api_version = "2026-07"
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/uninstalled"
+  topics = [ "app/uninstalled" ]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/scopes_update"
+  topics = [ "app/scopes_update" ]
+
+  [[webhooks.subscriptions]]
+  compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
+  uri = "/webhooks/compliance"
+
+[auth]
+redirect_urls = [ "https://APP_DOMAIN/api/auth" ]
+
+[build]
+include_config_on_deploy = true
+automatically_update_urls_on_dev = false

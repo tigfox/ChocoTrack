@@ -7,7 +7,7 @@ See [`sampler_builder.md`](sampler_builder.md) for the plan, decisions and phase
 | Folder | What |
 |---|---|
 | `choco-track/` | The Shopify app (React Router, TypeScript, Polaris web components, Prisma for sessions) |
-| `mockup/` | The clickable mockup used for store-team feedback (Vite + Docker, fake data) |
+| `mockup/` | The clickable mockup used for store-team feedback (Vite + Docker, fake data). **Frozen** - kept for reference only |
 
 ## Run the app (development)
 
@@ -42,7 +42,9 @@ LIVE_STORE=<store>.myshopify.com npm run test:live  # real queries + an assemble
 
 The unit tests use a fake GraphQL client. The live test needs the `shopify store auth` step above.
 
-## Mockup
+## Mockup (frozen)
+
+Approved by the store team and no longer maintained or run in CI. To look at it:
 
 ```bash
 cd mockup && docker compose up --build   # http://localhost:8080

@@ -82,7 +82,7 @@ Notes: the mockup page needs internet access to load Polaris from Shopify's CDN.
 
 Move `mockup/src/domain` into the app (or a shared package) and adjust for any feedback. Pure functions, no network.
 
-*Done:* copied to `choco-track/app/domain` (types, stock, validate, apply, search, counts, box, pickList) with their tests, Vitest and a coverage threshold of 80%. The mockup's `workflow.ts` (stale-stock simulation) stays mockup-only. The mockup keeps its own copy of the domain until it is retired, so fixes must be made in both for now.
+*Done:* copied to `choco-track/app/domain` (types, stock, validate, apply, search, counts, box, pickList) with their tests, Vitest and a coverage threshold of 80%. The mockup's `workflow.ts` (stale-stock simulation) stays mockup-only. The mockup is frozen (reference only), so its copy of the domain is intentionally not kept in sync.
 
 ### Phase 3 - Shopify service layer
 

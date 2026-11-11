@@ -1,3 +1,5 @@
+> **Frozen.** This mockup was approved by the store team and is kept for reference only. It is no longer changed, tested in CI or updated by Dependabot. The product is the app in [`../choco-track`](../choco-track).
+
 # ChocoTrack kits - clickable mockup
 
 A fake-data, no-backend prototype of the sampler-kit workflow, built with React and Shopify's Polaris web components (the same UI library the real app will use) so the store team can try it and give feedback **before** the real Shopify app is built.
