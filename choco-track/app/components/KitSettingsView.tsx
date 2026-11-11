@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useFetcher } from "react-router";
-import type { SettingsResponse } from "../lib/handleKitSettings";
+import { useSettingsAction } from "../hooks/useSettingsAction";
 import type { Workspace } from "../shopify/workspace";
 import { CreateKitModal } from "./CreateKitModal";
 import { KitSettingsCard } from "./KitSettingsCard";
@@ -11,12 +10,12 @@ interface Props {
 
 export function KitSettingsView({ workspace }: Props) {
   const [creating, setCreating] = useState(false);
-  const fetcher = useFetcher<SettingsResponse>();
+  const { busy, response, submit } = useSettingsAction();
   const closeModal = useCallback(() => setCreating(false), []);
 
   useEffect(() => {
-    if (fetcher.data?.ok) setCreating(false);
-  }, [fetcher.data]);
+    if (response?.ok) setCreating(false);
+  }, [response]);
 
   return (
     <s-page heading="Kit settings" inlineSize="base">
@@ -24,7 +23,7 @@ export function KitSettingsView({ workspace }: Props) {
         Create a new kit
       </s-button>
       <s-stack gap="base">
-        {fetcher.data?.ok && <s-banner tone="success">{fetcher.data.message}</s-banner>}
+        {response?.ok && <s-banner tone="success">{response.message}</s-banner>}
         {workspace.kits.length === 0 && (
           <s-banner tone="warning" heading="No kits yet">
             Create a kit to get started. A kit is an ordinary product with tracked inventory.
@@ -37,12 +36,10 @@ export function KitSettingsView({ workspace }: Props) {
           open={creating}
           existing={workspace.kits}
           collections={workspace.collections}
-          busy={fetcher.state !== "idle"}
-          error={fetcher.data && !fetcher.data.ok ? fetcher.data.message : undefined}
+          busy={busy}
+          error={response && !response.ok ? response.message : undefined}
           onClose={closeModal}
-          onCreate={(kit) =>
-            fetcher.submit({ intent: "create", ...kit }, { method: "post", encType: "application/json" })
-          }
+          onCreate={(kit) => void submit({ intent: "create", ...kit })}
         />
       </s-stack>
     </s-page>

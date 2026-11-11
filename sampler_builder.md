@@ -147,6 +147,13 @@ Playwright E2E tests on the dev store, security review, error and empty states, 
 - Fixed along the way: the "All items" collection option was reported as the text "All items" (an empty `s-option` value is reported by its label), so it was not remembered. Empty choices now use a real value.
 - Browser tests (`npm run test:e2e`, logged-in Chrome over CDP) cover Settings, categories and the filter.
 
+### Error and edge-case pass (Done)
+
+- **Dropped connection:** a lost network during a submit, a settings save or a search used to replace the whole page with an "Application Error" and lose the mix. These calls now go through `fetchJson` (JSON routes under `/app/api/`), so the failure shows next to the work. A submit that cannot be confirmed keeps the mix and the run id, so retrying is safe and applies once.
+- **Shopify errors around a run:** a failure while reading the catalog before a run is now an error result, not an exception; a failed stock refresh after a successful run no longer makes the success look like a failure.
+- Bug found by the new tests' neighbours: `inventoryActivate` needs an idempotency key in API 2026-07 (brand-new kits could not be assembled).
+- Browser tests added for: dropped connection (submit, settings, search), stale stock changed in Shopify, bar not stocked at a location, more kits than stock allows, duplicate SKU.
+
 ### Phase 7 - Deploy  *(files built and tested locally; waiting on the Droplet, hostname and GitHub secrets)*
 
 Target: a small DigitalOcean Droplet. Everything is in `deploy/droplet/` with a step-by-step runbook (`README.md`).

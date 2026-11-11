@@ -12,9 +12,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const options = parseSearchParams(new URL(request.url).searchParams);
   try {
     const result = await searchVariants(fromAdmin(admin), options);
-    return { ok: true as const, ...result, limit: options.first };
+    return Response.json({ ok: true as const, ...result, limit: options.first });
   } catch (err) {
     logError("search failed", err);
-    return { ok: false as const, message: friendlyMessage(err), variants: [], stock: {} };
+    return Response.json({ ok: false as const, message: friendlyMessage(err), variants: [], stock: {} });
   }
 };

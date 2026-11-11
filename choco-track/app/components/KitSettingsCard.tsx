@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
-import { useFetcher } from "react-router";
 import type { Collection, KitSize } from "../domain/types";
-import type { SettingsResponse } from "../lib/handleKitSettings";
+import { useSettingsAction } from "../hooks/useSettingsAction";
 import type { CatalogVariant } from "../shopify/catalog";
 import { fieldValue } from "../wc";
 import { CategorySelect } from "./CategorySelect";
@@ -16,7 +15,7 @@ type SizeOption = "4" | "5" | "6" | "12";
 const toSize = (v: string): SizeOption => (v === "4" || v === "5" || v === "12" ? v : "6");
 
 export function KitSettingsCard({ kit, collections }: Props) {
-  const fetcher = useFetcher<SettingsResponse>();
+  const { busy, response, submit } = useSettingsAction();
   const [title, setTitle] = useState(kit.title);
   const [size, setSize] = useState<SizeOption>(String(kit.kitSize ?? 6) as SizeOption);
   const [categoryId, setCategoryId] = useState(kit.categoryId ?? "");
@@ -29,20 +28,14 @@ export function KitSettingsCard({ kit, collections }: Props) {
   }, [kit.title, kit.kitSize, kit.categoryId]);
 
   const changed = title.trim() !== kit.title || Number(size) !== kit.kitSize || categoryId !== (kit.categoryId ?? "");
-  const busy = fetcher.state !== "idle";
   const save = () =>
-    fetcher.submit(
-      { intent: "update", kitId: kit.id, title: title.trim(), size: Number(size) as KitSize, categoryId },
-      { method: "post", encType: "application/json" },
-    );
+    submit({ intent: "update", kitId: kit.id, title: title.trim(), size: Number(size) as KitSize, categoryId });
 
   return (
     <s-section heading={kit.title}>
       <s-stack gap="base">
         <s-text color="subdued">{`SKU ${kit.sku}`}</s-text>
-        {fetcher.data && (
-          <s-banner tone={fetcher.data.ok ? "success" : "critical"}>{fetcher.data.message}</s-banner>
-        )}
+        {response && <s-banner tone={response.ok ? "success" : "critical"}>{response.message}</s-banner>}
         <s-grid gridTemplateColumns="2fr 1fr" gap="base">
           <s-text-field label="Name" value={title} onInput={(e) => setTitle(fieldValue(e))} />
           <s-select label="Kit size" value={size} onInput={(e) => setSize(toSize(fieldValue(e)))}>

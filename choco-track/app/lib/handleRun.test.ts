@@ -1,3 +1,4 @@
+import { ShopifyApiError } from "../shopify/errors";
 import { fakeClient } from "../shopify/fakeClient";
 import { handleRun } from "./handleRun";
 
@@ -123,5 +124,35 @@ describe("handleRun", () => {
     expect(client.calls.some((c) => c.query.includes("inventoryActivate"))).toBe(false);
     const sent = (client.calls[1]?.variables as { input: { changes: { changeFromQuantity: number }[] } }).input.changes;
     expect(sent.map((c) => c.changeFromQuantity)).toEqual([10, 4]);
+  });
+
+  describe("when Shopify fails outside the inventory change", () => {
+    beforeEach(() => {
+      vi.spyOn(console, "error").mockImplementation(() => undefined);
+    });
+    afterEach(() => vi.restoreAllMocks());
+
+    it("reports an unreachable Shopify before the run as an error result, not an exception", async () => {
+      const client = fakeClient(new ShopifyApiError("down"));
+      const r = await handleRun(client, body(), "assemble");
+      expect(r.result).toEqual({
+        ok: false,
+        kind: "error",
+        message: "Shopify could not be reached or rejected the request. Please try again.",
+      });
+      expect(client.calls).toHaveLength(1);
+      expect(console.error).toHaveBeenCalled();
+    });
+
+    it("still reports success when only the stock refresh afterwards fails", async () => {
+      const client = fakeClient(
+        { nodes: [variantNode(KIT, "SMP-4", "4", 0), variantNode(A, "MINI-A", null, 10)] },
+        adjusted,
+        new ShopifyApiError("blip"),
+      );
+      const r = await handleRun(client, body(), "assemble");
+      expect(r.result).toMatchObject({ ok: true, adjustmentId: "g" });
+      expect(r.stock).toBeUndefined();
+    });
   });
 });

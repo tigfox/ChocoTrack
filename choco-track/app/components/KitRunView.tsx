@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useFetcher } from "react-router";
 import { buildPickList } from "../domain/pickList";
 import { sumUnits } from "../domain/stock";
 import type { StockMap, UnitCounts } from "../domain/types";
 import { useVariantSearch } from "../hooks/useVariantSearch";
 import { collectionForKit, defaultCollectionId, pickInitialSelection, readPreferences, writePreferences, type Preferences } from "../lib/preferences";
+import { fetchJson } from "../lib/fetchJson";
 import { PAGE_SIZE } from "../lib/searchParams";
 import type { CatalogVariant } from "../shopify/catalog";
 import type { SubmitResult } from "../shopify/submit";
@@ -83,8 +83,8 @@ export function KitRunView({ workspace, mode }: Props) {
   };
 
   const search = useVariantSearch(query, collectionId, limit);
-  const submitFetcher = useFetcher<RunResponse>();
-  const submitting = submitFetcher.state !== "idle";
+  const [submitting, setSubmitting] = useState(false);
+  const [unconfirmed, setUnconfirmed] = useState<string | undefined>();
 
   // Keep every variant we have seen (titles for the summary, ids for the box preview) and its stock.
   useEffect(() => {
@@ -101,25 +101,8 @@ export function KitRunView({ workspace, mode }: Props) {
   const pickList = buildPickList({ stock, variantsById: known, mode, kit, kitCount, perKit, locationId });
   const allVariants = useMemo(() => Object.values(known), [known]);
 
-  const submittedLabel = useRef("");
-  const submittedLocation = useRef("");
-
-  const submit = () => {
-    submittedLabel.current = config.doneLabel(kitCount, kit?.title ?? "kit");
-    submittedLocation.current = locationName;
-    const seenStock = Object.fromEntries(
-      [kitId, ...Object.keys(perKit)].map((id) => [id, stock[id] ?? {}]),
-    );
-    submitFetcher.submit(
-      { mode, kitId, kitCount, locationId, perKit, seenStock, runId: runId.current },
-      { method: "post", encType: "application/json" },
-    );
-  };
-
-  useEffect(() => {
-    const data = submitFetcher.data;
-    if (!data) return;
-    setShown({ result: data.result, label: submittedLabel.current, locationName: submittedLocation.current });
+  const applyResponse = (data: RunResponse, label: string, locationLabel: string) => {
+    setShown({ result: data.result, label, locationName: locationLabel });
     if (data.stock) setStock((prev) => mergeStock(prev, data.stock ?? {}));
     if (data.result.ok) {
       setPerKit({});
@@ -127,7 +110,32 @@ export function KitRunView({ workspace, mode }: Props) {
     } else if (data.result.kind === "conflict") {
       runId.current = crypto.randomUUID();
     }
-  }, [submitFetcher.data]);
+  };
+
+  const submit = async () => {
+    const label = config.doneLabel(kitCount, kit?.title ?? "kit");
+    const seenStock = Object.fromEntries([kitId, ...Object.keys(perKit)].map((id) => [id, stock[id] ?? {}]));
+    setSubmitting(true);
+    setUnconfirmed(undefined);
+    const res = await fetchJson<RunResponse>(`/app/api/run?mode=${mode}`, {
+      mode,
+      kitId,
+      kitCount,
+      locationId,
+      perKit,
+      seenStock,
+      runId: runId.current,
+    });
+    setSubmitting(false);
+    if (res.ok) {
+      setShown(undefined);
+      applyResponse(res.data, label, locationName);
+    } else {
+      // The change may or may not have reached Shopify. The run id is kept, so trying again cannot apply it twice.
+      setShown(undefined);
+      setUnconfirmed(res.message);
+    }
+  };
 
   return (
     <s-page heading={config.pageHeading} inlineSize="large">
@@ -140,6 +148,11 @@ export function KitRunView({ workspace, mode }: Props) {
         {kits.length === 0 && (
           <s-banner tone="warning" heading="No kits yet">
             Add a kit on the Settings page to get started. A kit is an ordinary product with tracked inventory.
+          </s-banner>
+        )}
+        {unconfirmed && (
+          <s-banner tone="warning" heading="We couldn't confirm that went through" dismissible>
+            {`${unconfirmed} Your mix is still here. Trying again is safe: the same request will not be applied twice. If it keeps failing, check the stock in Shopify first.`}
           </s-banner>
         )}
         {shown && (
