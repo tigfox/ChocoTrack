@@ -4,6 +4,7 @@ import { buildPickList } from "../domain/pickList";
 import { sumUnits } from "../domain/stock";
 import type { StockMap, UnitCounts } from "../domain/types";
 import { useVariantSearch } from "../hooks/useVariantSearch";
+import { defaultCollectionId, pickInitialSelection, readPreferences, writePreferences, type Preferences } from "../lib/preferences";
 import { PAGE_SIZE } from "../lib/searchParams";
 import type { CatalogVariant } from "../shopify/catalog";
 import type { SubmitResult } from "../shopify/submit";
@@ -31,6 +32,14 @@ interface Shown {
   readonly locationName: string;
 }
 
+const browserStorage = (): Storage | undefined => {
+  try {
+    return window.localStorage;
+  } catch {
+    return undefined;
+  }
+};
+
 const index = (variants: readonly CatalogVariant[]): Readonly<Record<string, CatalogVariant>> =>
   Object.fromEntries(variants.map((v) => [v.id, v]));
 
@@ -42,19 +51,31 @@ const mergeStock = (a: StockMap, b: StockMap): StockMap => {
 
 export function KitRunView({ workspace, mode }: Props) {
   const config = RUN_MODES[mode];
-  const [locationId, setLocationId] = useState(workspace.locations[0]?.id ?? "");
+  const initial = pickInitialSelection(workspace.locations, workspace.kits, {});
+  const [locationId, setLocationId] = useState(initial.locationId);
   const [kits, setKits] = useState<readonly CatalogVariant[]>(workspace.kits);
-  const [kitId, setKitId] = useState((workspace.kits.find((k) => k.kitSize === 6) ?? workspace.kits[0])?.id ?? "");
+  const [kitId, setKitId] = useState(initial.kitId);
   const [kitCountRaw, setKitCountRaw] = useState("1");
   const [perKit, setPerKit] = useState<UnitCounts>({});
   const [query, setQuery] = useState("");
-  const [collectionId, setCollectionId] = useState("");
+  const [collectionId, setCollectionId] = useState(() => defaultCollectionId(workspace.collections));
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [known, setKnown] = useState<Readonly<Record<string, CatalogVariant>>>(() => index(workspace.kits));
   const [stock, setStock] = useState<StockMap>(workspace.stock);
   const [shown, setShown] = useState<Shown | undefined>();
   const [creating, setCreating] = useState(false);
   const runId = useRef(crypto.randomUUID());
+
+  // Apply what this browser remembered (after mount, so server and client render the same first paint).
+  useEffect(() => {
+    const prefs = readPreferences(browserStorage());
+    const chosen = pickInitialSelection(workspace.locations, workspace.kits, prefs);
+    setLocationId(chosen.locationId);
+    setKitId(chosen.kitId);
+    setCollectionId(defaultCollectionId(workspace.collections, prefs.collectionId));
+  }, [workspace.locations, workspace.kits, workspace.collections]);
+
+  const remember = (update: Preferences) => writePreferences(browserStorage(), update);
 
   const search = useVariantSearch(query, collectionId, limit);
   const submitFetcher = useFetcher<RunResponse>();
@@ -113,6 +134,7 @@ export function KitRunView({ workspace, mode }: Props) {
     setKits((prev) => (prev.some((k) => k.id === data.kit.id) ? prev : [...prev, data.kit]));
     setKnown((prev) => ({ ...prev, [data.kit.id]: data.kit }));
     setKitId(data.kit.id);
+    writePreferences(browserStorage(), { kitId: data.kit.id });
     setCreating(false);
   }, [kitFetcher.data]);
 
@@ -144,9 +166,15 @@ export function KitRunView({ workspace, mode }: Props) {
               locations={workspace.locations}
               kits={kits}
               locationId={locationId}
-              onLocation={setLocationId}
+              onLocation={(id) => {
+                setLocationId(id);
+                remember({ locationId: id });
+              }}
               kitId={kitId}
-              onKit={setKitId}
+              onKit={(id) => {
+                setKitId(id);
+                remember({ kitId: id });
+              }}
               kitCount={kitCountRaw}
               onKitCount={setKitCountRaw}
               countLabel={config.countLabel}
@@ -168,6 +196,7 @@ export function KitRunView({ workspace, mode }: Props) {
               collectionId={collectionId}
               onCollection={(id) => {
                 setCollectionId(id);
+                remember({ collectionId: id });
                 setLimit(PAGE_SIZE);
               }}
               canShowMore={(search.data?.variants.length ?? 0) >= limit}

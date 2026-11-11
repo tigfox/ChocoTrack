@@ -25,4 +25,17 @@ describe('parseNewKit', () => {
   ])('rejects %s', (_n, raw, error) => {
     expect(parseNewKit(raw)).toEqual({ ok: false, error });
   });
+
+  it.each([["17", "17"], [" 17.5 ", "17.5"], ["0.99", "0.99"], ["1234.56", "1234.56"]])("accepts price %s", (price, expected) => {
+    expect(parseNewKit({ title: "T", size: 4, sku: "S", price })).toEqual({
+      ok: true,
+      value: { title: "T", size: 4, sku: "S", price: expected },
+    });
+  });
+  it("treats a blank price as absent (defaults to 0.00)", () => {
+    expect(parseNewKit({ title: "T", size: 4, sku: "S", price: "" })).toEqual({ ok: true, value: { title: "T", size: 4, sku: "S" } });
+  });
+  it.each(["-1", "abc", "1.234", "1,5", "1e3", "9999999", 5])("rejects price %s", (price) => {
+    expect(parseNewKit({ title: "T", size: 4, sku: "S", price })).toEqual({ ok: false, error: "Enter a price like 18.00." });
+  });
 });
