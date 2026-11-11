@@ -1,0 +1,13 @@
+{$APP_DOMAIN} {
+	encode zstd gzip
+
+	# No X-Frame-Options here: the app sets its own frame-ancestors policy so Shopify can embed it.
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	reverse_proxy app:3000
+}

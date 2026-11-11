@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    name: App (typecheck, lint, test, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: choco-track
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: choco-track/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run test:coverage
+      - run: npm run build
+
+  mockup:
+    name: Mockup (typecheck, test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mockup
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mockup/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm test
+
+  deploy:
+    name: Build image and deploy to the Droplet
+    needs: [app, mockup]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # Create a "production" environment in the repo settings to require manual approval before deploys.
+    environment: production
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/chocotrack
+      # Empty until the Droplet secrets are added (see deploy/droplet/README.md); the deploy step is skipped then.
+      DROPLET_HOST: ${{ secrets.DROPLET_HOST }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: choco-track
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy over SSH
+        if: env.DROPLET_HOST != ''
+        env:
+          HOST: ${{ secrets.DROPLET_HOST }}
+          SSH_USER: ${{ secrets.DROPLET_USER }}
+          SSH_KEY: ${{ secrets.DROPLET_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DROPLET_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          SSH_OPTS="-i $HOME/.ssh/deploy_key -o UserKnownHostsFile=$HOME/.ssh/known_hosts -o StrictHostKeyChecking=yes"
+          scp $SSH_OPTS deploy/droplet/docker-compose.yml deploy/droplet/Caddyfile deploy/droplet/deploy.sh deploy/droplet/backup.sh \
+            "$SSH_USER@$HOST:/opt/chocotrack/"
+          ssh $SSH_OPTS "$SSH_USER@$HOST" "chmod +x /opt/chocotrack/deploy.sh /opt/chocotrack/backup.sh && /opt/chocotrack/deploy.sh ${{ github.sha }}"

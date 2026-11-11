@@ -48,6 +48,6 @@ The unit tests use a fake GraphQL client. The live test needs the `shopify store
 cd mockup && docker compose up --build   # http://localhost:8080
 ```
 
-## Not decided yet
+## Deploy
 
-Hosting (AWS, GCP, DigitalOcean App Platform or a Droplet) - see the plan. Production needs PostgreSQL for sessions instead of SQLite.
+Initial hosting is a small DigitalOcean Droplet (Docker Compose, Caddy HTTPS, SQLite sessions). Setup, secrets, deploys, rollback and backups are in [`deploy/droplet/README.md`](deploy/droplet/README.md). CI/CD is `.github/workflows/ci.yml`. If the app outgrows the Droplet, see "Moving on" in that file.

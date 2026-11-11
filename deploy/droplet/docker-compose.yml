@@ -1,0 +1,44 @@
+# ChocoTrack on a single DigitalOcean Droplet: Caddy (automatic HTTPS) -> app. Run from /opt/chocotrack.
+services:
+  app:
+    image: ghcr.io/tigfox/chocotrack:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+    volumes:
+      - /opt/chocotrack/data:/data # SQLite session database (owned by uid 1000)
+    expose:
+      - "3000"
+    mem_limit: 640m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?set APP_DOMAIN in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  caddy_data:
+  caddy_config:

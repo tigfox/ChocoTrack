@@ -20,7 +20,7 @@ A Shopify app that assembles "sampler kits" from mini chocolate bar inventory, u
 | Surface | Embedded admin UI only. No storefront, POS or order webhooks in v1. |
 | Stack | Shopify CLI React Router template (TypeScript, Polaris, App Bridge). Prisma only for OAuth session storage. |
 | Distribution | Built for one store; no hardcoded shop so it can go public later. |
-| Hosting | **Undecided - the store team chooses among AWS, GCP, DigitalOcean App Platform, or a DigitalOcean Droplet.** Build container-portable so any works (see Hosting). |
+| Hosting | **Initial: one small DigitalOcean Droplet** (Docker Compose, Caddy for HTTPS, SQLite sessions on disk; runbook in `deploy/droplet/`). May move to a larger platform (AWS, GCP, App Platform) if the app grows; the container stays portable (see Hosting). |
 | Deferred | Lots and expiry dates, cost rollup, templates, audit/history UI. |
 
 ## Key design points
@@ -140,9 +140,16 @@ Playwright E2E tests on the dev store, security review, error and empty states, 
 - Per-shop rate limiting, if the app goes public.
 - Confirm `application_url`, redirect URLs and webhook `api_version` (`2027-01` from the template) at deploy.
 
-### Phase 7 - Deploy
+### Phase 7 - Deploy  *(files built and tested locally; waiting on the Droplet, hostname and GitHub secrets)*
 
-Once the host is chosen: infrastructure as code for the selected provider (a Compose file and bootstrap script for a Droplet), a CI/CD pipeline, a staging deploy against the dev store, then production. Update the Shopify app URLs and webhooks to the hosted domain.
+Target: a small DigitalOcean Droplet. Everything is in `deploy/droplet/` with a step-by-step runbook (`README.md`).
+
+- **Image:** `choco-track/Dockerfile` runs as a non-root user, keeps the SQLite session database on a mounted `/data` volume, runs `prisma migrate deploy` on start, and has a healthcheck on `GET /healthz`. Built and run locally with placeholder Shopify values: migrations applied, health 200, container reported healthy.
+- **Stack:** `docker-compose.yml` (app plus Caddy with automatic HTTPS), `Caddyfile`, `.env.example`. Compose and Caddy configs validated.
+- **Server scripts:** `bootstrap.sh` (Docker, firewall, fail2ban, unattended upgrades, swap, `deploy` user), `deploy.sh` (pull, restart, wait for healthy; also rolls back by tag), `backup.sh` (daily SQLite backup, 14 days).
+- **CI/CD:** `.github/workflows/ci.yml` runs typecheck, lint, tests and build for the app, tests for the mockup, then on `main` builds and pushes `ghcr.io/tigfox/chocotrack:<sha>` and deploys over SSH (skipped until the Droplet secrets exist).
+- **Database decision:** SQLite on the Droplet for now. It holds only OAuth sessions, so a separate PostgreSQL server would only use memory on a small VM. Moving to a platform without a persistent disk means switching the Prisma datasource to PostgreSQL; sessions are disposable, so no data migration.
+- **Left to do (needs the store team):** create the Droplet and hostname, add the four GitHub secrets, make the image package public, fill in `.env`, then `shopify app config link` and `shopify app deploy` for the production URLs.
 
 ### Later
 
