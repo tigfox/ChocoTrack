@@ -5,13 +5,17 @@ const A = "gid://shopify/ProductVariant/1";
 const KIT = "gid://shopify/ProductVariant/2";
 const L = "gid://shopify/Location/3";
 
-const variantNode = (id: string, sku: string, kitSize: string | null) => ({
+/** A variant as returned by Shopify, with its live stock at L (omit `qty` for "not stocked here"). */
+const variantNode = (id: string, sku: string, kitSize: string | null, qty?: number) => ({
   id,
   title: "Default Title",
   sku,
   barcode: null,
   image: null,
-  inventoryItem: { id: `gid://shopify/InventoryItem/${id.slice(-1)}` },
+  inventoryItem: {
+    id: `gid://shopify/InventoryItem/${id.slice(-1)}`,
+    inventoryLevels: { nodes: qty === undefined ? [] : [{ location: { id: L }, quantities: [{ quantity: qty }] }] },
+  },
   product: { title: sku, featuredMedia: null, collections: { nodes: [] }, kitSize: kitSize ? { value: kitSize } : null },
 });
 const stockNode = (id: string, qty: number) => ({
@@ -30,6 +34,9 @@ const body = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 const adjusted = { inventoryAdjustQuantities: { inventoryAdjustmentGroup: { id: "g" }, userErrors: [] } };
+const stale = {
+  inventoryAdjustQuantities: { inventoryAdjustmentGroup: null, userErrors: [{ message: "s", code: "CHANGE_FROM_QUANTITY_STALE" }] },
+};
 
 describe("handleRun", () => {
   it("rejects malformed input before calling Shopify", async () => {
@@ -45,23 +52,22 @@ describe("handleRun", () => {
     expect(client.calls).toHaveLength(0);
   });
 
-  it("assembles with variants read from Shopify and returns fresh stock", async () => {
+  it("assembles with one variants-and-stock read, one change and one fresh stock read", async () => {
     const client = fakeClient(
-      { nodes: [variantNode(KIT, "SMP-4", "4"), variantNode(A, "MINI-A", null)] },
-      { nodes: [stockNode(KIT, 0), stockNode(A, 10)] },
+      { nodes: [variantNode(KIT, "SMP-4", "4", 0), variantNode(A, "MINI-A", null, 10)] },
       adjusted,
       { nodes: [stockNode(KIT, 1), stockNode(A, 6)] },
     );
-    const r = await handleRun(client, { ...body(), kitId: KIT }, "assemble");
+    const r = await handleRun(client, body(), "assemble");
     expect(r.result).toMatchObject({ ok: true, adjustmentId: "g" });
     expect(r.stock).toEqual({ [KIT]: { [L]: 1 }, [A]: { [L]: 6 } });
+    expect(client.calls).toHaveLength(3);
   });
 
   it("disassembles on the disassemble page", async () => {
     const seenStock = { [A]: { [L]: 10 }, [KIT]: { [L]: 3 } };
     const client = fakeClient(
-      { nodes: [variantNode(KIT, "SMP-4", "4"), variantNode(A, "MINI-A", null)] },
-      { nodes: [stockNode(KIT, 0), stockNode(A, 10)] },
+      { nodes: [variantNode(KIT, "SMP-4", "4", 3), variantNode(A, "MINI-A", null, 10)] },
       adjusted,
       { nodes: [stockNode(KIT, 2), stockNode(A, 14)] },
     );
@@ -71,28 +77,23 @@ describe("handleRun", () => {
   });
 
   it("returns a validation failure without changing anything", async () => {
-    const client = fakeClient(
-      { nodes: [variantNode(KIT, "SMP-4", "4"), variantNode(A, "MINI-A", null)] },
-      { nodes: [stockNode(KIT, 0), stockNode(A, 10)] },
-    );
+    const client = fakeClient({ nodes: [variantNode(KIT, "SMP-4", "4", 0), variantNode(A, "MINI-A", null, 10)] });
     const r = await handleRun(client, body({ perKit: { [A]: 3 } }), "assemble");
     expect(r.result).toMatchObject({ ok: false, kind: "validation" });
     expect(r.stock).toBeUndefined();
-    expect(client.calls).toHaveLength(2);
+    expect(client.calls).toHaveLength(1);
   });
 
   it("reports a missing kit as a validation failure", async () => {
-    const client = fakeClient({ nodes: [variantNode(A, "MINI-A", null)] }, { nodes: [stockNode(A, 10)] });
+    const client = fakeClient({ nodes: [variantNode(A, "MINI-A", null, 10)] });
     const r = await handleRun(client, body(), "assemble");
     expect(r.result).toMatchObject({ ok: false, kind: "validation" });
   });
 
   it("returns refreshed stock on a stale-stock conflict", async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const stale = { inventoryAdjustQuantities: { inventoryAdjustmentGroup: null, userErrors: [{ message: "s", code: "CHANGE_FROM_QUANTITY_STALE" }] } };
     const client = fakeClient(
-      { nodes: [variantNode(KIT, "SMP-4", "4"), variantNode(A, "MINI-A", null)] },
-      { nodes: [stockNode(KIT, 0), stockNode(A, 10)] },
+      { nodes: [variantNode(KIT, "SMP-4", "4", 0), variantNode(A, "MINI-A", null, 10)] },
       stale,
       { nodes: [stockNode(A, 2), stockNode(KIT, 0)] },
     );
@@ -102,29 +103,25 @@ describe("handleRun", () => {
   });
 
   it("refuses an ordinary product posted as the kit", async () => {
-    const client = fakeClient(
-      { nodes: [variantNode(KIT, "MINI-X", null), variantNode(A, "MINI-A", null)] },
-      { nodes: [stockNode(KIT, 9), stockNode(A, 50)] },
-    );
+    const client = fakeClient({ nodes: [variantNode(KIT, "MINI-X", null, 9), variantNode(A, "MINI-A", null, 50)] });
     const r = await handleRun(client, body({ perKit: { [A]: 40 }, seenStock: { [A]: { [L]: 50 }, [KIT]: { [L]: 9 } } }), "assemble");
     expect(r.result).toMatchObject({ ok: false, kind: "validation" });
-    expect(client.calls).toHaveLength(2);
+    expect(client.calls).toHaveLength(1);
   });
 
   it("activates from live stock, not from a forged snapshot that hides a level", async () => {
-    // The browser claims the kit has no level here; Shopify says it does (4), so nothing is activated
+    // The browser claims the kit has no level here; Shopify says it has 4, so nothing is activated
     // and the guard falls back to the live quantity.
     const seenStock = { [A]: { [L]: 10 } };
     const client = fakeClient(
-      { nodes: [variantNode(KIT, "SMP-4", "4"), variantNode(A, "MINI-A", null)] },
-      { nodes: [stockNode(KIT, 4), stockNode(A, 10)] },
+      { nodes: [variantNode(KIT, "SMP-4", "4", 4), variantNode(A, "MINI-A", null, 10)] },
       adjusted,
       { nodes: [stockNode(KIT, 5), stockNode(A, 6)] },
     );
     const r = await handleRun(client, body({ seenStock }), "assemble");
     expect(r.result).toMatchObject({ ok: true });
     expect(client.calls.some((c) => c.query.includes("inventoryActivate"))).toBe(false);
-    const sent = (client.calls[2]?.variables as { input: { changes: { changeFromQuantity: number }[] } }).input.changes;
+    const sent = (client.calls[1]?.variables as { input: { changes: { changeFromQuantity: number }[] } }).input.changes;
     expect(sent.map((c) => c.changeFromQuantity)).toEqual([10, 4]);
   });
 });

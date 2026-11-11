@@ -28,10 +28,11 @@ describe.skipIf(!store)('live dev store', () => {
       listKits(cliClient),
       searchVariants(cliClient, { text: 'caramel' }),
     ]);
+    const kitList = kits.variants;
     expect(locations.map((l) => l.name)).toEqual(expect.arrayContaining(['Warehouse', 'Market Store']));
     expect(collections.map((c) => c.title)).toContain('Mini bars (not sold individually)');
-    expect(kits.map((k) => [k.sku, k.kitSize]).sort()).toEqual([['SMP-12', 12], ['SMP-4', 4], ['SMP-5', 5], ['SMP-6', 6]]);
-    expect(minis.map((m) => m.sku)).toContain('MINI-RUM-CARAMEL');
+    expect(kitList.map((k) => [k.sku, k.kitSize]).sort()).toEqual([['SMP-12', 12], ['SMP-4', 4], ['SMP-5', 5], ['SMP-6', 6]]);
+    expect(minis.variants.map((m) => m.sku)).toContain('MINI-RUM-CARAMEL');
   }, 60_000);
 
   it('assembles then disassembles one 4-pack, restoring stock', async () => {
@@ -40,11 +41,12 @@ describe.skipIf(!store)('live dev store', () => {
       listKits(cliClient),
       searchVariants(cliClient, { text: 'MINI-', first: 4 }),
     ]);
+    const kitList = kits.variants;
     const warehouse = locations.find((l) => l.name === 'Warehouse');
-    const kit = kits.find((k) => k.sku === 'SMP-4');
+    const kit = kitList.find((k) => k.sku === 'SMP-4');
     if (!warehouse || !kit) throw new Error('seed data missing');
-    const perKit = Object.fromEntries(minis.map((m) => [m.id, 1]));
-    const ids = [kit, ...minis].map((v) => v.id);
+    const perKit = Object.fromEntries(minis.variants.map((m) => [m.id, 1]));
+    const ids = [kit, ...minis.variants].map((v) => v.id);
     const run = (mode: 'assemble' | 'disassemble', seenStock: StockMap) =>
       handleRun(
         cliClient,

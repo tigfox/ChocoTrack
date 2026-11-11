@@ -7,7 +7,7 @@ const node = (over: Partial<VariantNode> = {}, product: Partial<VariantNode['pro
   sku: 'MINI-RUM',
   barcode: '850',
   image: null,
-  inventoryItem: { id: 'gid://shopify/InventoryItem/9' },
+  inventoryItem: { id: 'gid://shopify/InventoryItem/9', inventoryLevels: { nodes: [{ location: { id: 'L1' }, quantities: [{ quantity: 7 }] }] } },
   product: {
     title: 'Mini - Rum Caramel',
     featuredMedia: null,
@@ -72,13 +72,38 @@ describe('searchVariants', () => {
   it('sends the built query and maps nodes', async () => {
     const client = fakeClient({ productVariants: { nodes: [node()] } });
     const result = await searchVariants(client, { text: 'rum', collectionId: 'gid://shopify/Collection/42', first: 10 });
-    expect(result.map((v) => v.sku)).toEqual(['MINI-RUM']);
+    expect(result.variants.map((v) => v.sku)).toEqual(['MINI-RUM']);
     expect(client.calls[0]?.variables).toEqual({ query: 'collection:42 AND rum', first: 10 });
+  });
+  it('returns each variant\'s stock from the same query', async () => {
+    const client = fakeClient({ productVariants: { nodes: [node()] } });
+    const result = await searchVariants(client);
+    expect(result.stock).toEqual({ 'gid://shopify/ProductVariant/1': { L1: 7 } });
+    expect(client.calls).toHaveLength(1);
+    expect(client.calls[0]?.query).toContain('inventoryLevels');
   });
   it('searches everything by default', async () => {
     const client = fakeClient({ productVariants: { nodes: [] } });
     await searchVariants(client);
     expect(client.calls[0]?.variables).toEqual({ query: null, first: 50 });
+  });
+});
+
+describe('stock extraction', () => {
+  it('omits stock for nodes that were fetched without levels', async () => {
+    const withoutLevels = node({ inventoryItem: { id: 'i' } });
+    const client = fakeClient({ productVariants: { nodes: [withoutLevels] } });
+    await expect(searchVariants(client)).resolves.toMatchObject({ stock: {} });
+  });
+  it('records an empty entry for a variant stocked nowhere', async () => {
+    const nowhere = node({ inventoryItem: { id: 'i', inventoryLevels: { nodes: [] } } });
+    const client = fakeClient({ productVariants: { nodes: [nowhere] } });
+    await expect(searchVariants(client)).resolves.toMatchObject({ stock: { 'gid://shopify/ProductVariant/1': {} } });
+  });
+  it('treats a level with no available quantity as 0', async () => {
+    const odd = node({ inventoryItem: { id: 'i', inventoryLevels: { nodes: [{ location: { id: 'L1' }, quantities: [] }] } } });
+    const client = fakeClient({ productVariants: { nodes: [odd] } });
+    await expect(searchVariants(client)).resolves.toMatchObject({ stock: { 'gid://shopify/ProductVariant/1': { L1: 0 } } });
   });
 });
 
@@ -93,8 +118,10 @@ describe('listKits', () => {
         ],
       },
     });
-    const kits = await listKits(client);
+    const { variants: kits, stock } = await listKits(client);
     expect(kits.map((k) => [k.sku, k.kitSize, k.title])).toEqual([['SMP-6', 6, 'Sampler Kit - 6 Pack']]);
+    expect(stock).toEqual({ k: { L1: 7 } });
+    expect(client.calls[0]?.query).toContain('inventoryLevels');
   });
 });
 
@@ -107,12 +134,13 @@ describe('getVariants', () => {
   it('looks up variants by id, skipping missing ones', async () => {
     const client = fakeClient({ nodes: [node(), null, {}] });
     const found = await getVariants(client, ['a', 'b', 'c']);
-    expect(found.map((v) => v.sku)).toEqual(['MINI-RUM']);
+    expect(found.variants.map((v) => v.sku)).toEqual(['MINI-RUM']);
+    expect(found.stock).toEqual({ 'gid://shopify/ProductVariant/1': { L1: 7 } });
     expect(client.calls[0]?.variables).toEqual({ ids: ['a', 'b', 'c'] });
   });
   it('makes no call for an empty list', async () => {
     const client = fakeClient();
-    await expect(getVariants(client, [])).resolves.toEqual([]);
+    await expect(getVariants(client, [])).resolves.toEqual({ variants: [], stock: {} });
     expect(client.calls).toHaveLength(0);
   });
 });

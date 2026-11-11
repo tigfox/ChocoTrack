@@ -1,10 +1,10 @@
 import { useEffect } from "react";
 import { useFetcher } from "react-router";
-import type { SearchResult } from "../shopify/workspace";
+import type { CatalogResult } from "../shopify/catalog";
 
 const DEBOUNCE_MS = 250;
 
-type SearchResponse = ({ ok: true; limit: number } & SearchResult) | { ok: false; message: string; variants: []; stock: Record<string, never> };
+type SearchResponse = ({ ok: true; limit: number } & CatalogResult) | { ok: false; message: string; variants: []; stock: Record<string, never> };
 
 /** Debounced server-side variant search (name, SKU or barcode, optional collection). */
 export function useVariantSearch(query: string, collectionId: string, limit: number) {

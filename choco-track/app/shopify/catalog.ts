@@ -1,4 +1,4 @@
-import type { Collection, KitSize, Variant } from '../domain/types';
+import type { Collection, KitSize, StockMap, Variant } from '../domain/types';
 import type { GraphqlClient } from './client';
 
 /** Namespace/key of the product metafield that marks a product as a sampler kit and holds its size. */
@@ -11,13 +11,19 @@ export interface CatalogVariant extends Variant {
   readonly inventoryItemId: string;
 }
 
+/** Stock rides along with every variant read, so no second round trip is needed. */
+const INVENTORY_ITEM = `inventoryItem {
+    id
+    inventoryLevels(first: 50) { nodes { location { id } quantities(names: ["available"]) { quantity } } }
+  }`;
+
 const VARIANT_FIELDS = `
   id
   title
   sku
   barcode
   image { url }
-  inventoryItem { id }
+  ${INVENTORY_ITEM}
   product {
     title
     featuredMedia { preview { image { url } } }
@@ -48,7 +54,16 @@ export interface VariantNode {
   readonly sku: string | null;
   readonly barcode: string | null;
   readonly image: { readonly url: string } | null;
-  readonly inventoryItem: { readonly id: string };
+  readonly inventoryItem: {
+    readonly id: string;
+    /** Absent when the node was fetched without stock (for example right after creating a kit). */
+    readonly inventoryLevels?: {
+      readonly nodes: ReadonlyArray<{
+        readonly location: { readonly id: string };
+        readonly quantities: ReadonlyArray<{ readonly quantity: number }>;
+      }>;
+    };
+  };
   readonly product: {
     readonly title: string;
     readonly featuredMedia: { readonly preview: { readonly image: { readonly url: string } | null } | null } | null;
@@ -56,6 +71,24 @@ export interface VariantNode {
     readonly kitSize: { readonly value: string } | null;
   };
 }
+
+/** Variants plus their available quantity per location (a missing location means "not stocked there"). */
+export interface CatalogResult {
+  readonly variants: readonly CatalogVariant[];
+  readonly stock: StockMap;
+}
+
+const nodeStock = (node: VariantNode): StockMap => {
+  const levels = node.inventoryItem.inventoryLevels?.nodes;
+  return levels
+    ? { [node.id]: Object.fromEntries(levels.map((l) => [l.location.id, l.quantities[0]?.quantity ?? 0])) }
+    : {};
+};
+
+const toResult = (nodes: readonly VariantNode[]): CatalogResult => ({
+  variants: nodes.map(toCatalogVariant),
+  stock: Object.assign({}, ...nodes.map(nodeStock)) as StockMap,
+});
 
 const DEFAULT_VARIANT_TITLE = 'Default Title';
 
@@ -110,12 +143,12 @@ export interface SearchOptions {
 export const searchVariants = async (
   client: GraphqlClient,
   { text = '', collectionId, first = 50 }: SearchOptions = {},
-): Promise<readonly CatalogVariant[]> => {
+): Promise<CatalogResult> => {
   const data = await client<{ productVariants: { nodes: readonly VariantNode[] } }>(SEARCH_QUERY, {
     query: buildSearchQuery(text, collectionId),
     first,
   });
-  return data.productVariants.nodes.map(toCatalogVariant);
+  return toResult(data.productVariants.nodes);
 };
 
 /** Tag on every kit product; the kit-size metafield holds the size. */
@@ -129,7 +162,9 @@ const KITS_QUERY = `#graphql
         featuredMedia { preview { image { url } } }
         collections(first: 25) { nodes { id } }
         kitSize: metafield(namespace: "${KIT_SIZE_METAFIELD.namespace}", key: "${KIT_SIZE_METAFIELD.key}") { value }
-        variants(first: 10) { nodes { id title sku barcode image { url } inventoryItem { id } } }
+        variants(first: 10) {
+          nodes { id title sku barcode image { url } ${INVENTORY_ITEM} }
+        }
       }
     }
   }
@@ -139,11 +174,17 @@ type KitProductNode = VariantNode['product'] & {
   readonly variants: { readonly nodes: ReadonlyArray<Omit<VariantNode, 'product'>> };
 };
 
-export const listKits = async (client: GraphqlClient): Promise<readonly CatalogVariant[]> => {
+export const listKits = async (client: GraphqlClient): Promise<CatalogResult> => {
   const data = await client<{ products: { nodes: readonly KitProductNode[] } }>(KITS_QUERY);
-  return data.products.nodes
-    .flatMap(({ variants, ...product }) => variants.nodes.map((v) => toCatalogVariant({ ...v, product })))
-    .filter((v) => v.kitSize !== undefined);
+  const all = toResult(data.products.nodes.flatMap(({ variants, ...product }) => variants.nodes.map((v) => ({ ...v, product }))));
+  const variants = all.variants.filter((v) => v.kitSize !== undefined);
+  const stock: StockMap = Object.fromEntries(
+    variants.flatMap((v): [string, Readonly<Record<string, number>>][] => {
+      const levels = all.stock[v.id];
+      return levels ? [[v.id, levels]] : [];
+    }),
+  );
+  return { variants, stock };
 };
 
 export const listCollections = async (client: GraphqlClient): Promise<readonly Collection[]> => {
@@ -152,8 +193,8 @@ export const listCollections = async (client: GraphqlClient): Promise<readonly C
 };
 
 /** Looks variants up by id (the server never trusts inventory item ids or kit sizes sent by the browser). */
-export const getVariants = async (client: GraphqlClient, ids: readonly string[]): Promise<readonly CatalogVariant[]> => {
-  if (ids.length === 0) return [];
+export const getVariants = async (client: GraphqlClient, ids: readonly string[]): Promise<CatalogResult> => {
+  if (ids.length === 0) return { variants: [], stock: {} };
   const data = await client<{ nodes: ReadonlyArray<VariantNode | null> }>(BY_ID_QUERY, { ids });
-  return data.nodes.filter((n): n is VariantNode => n !== null && n.inventoryItem !== undefined).map(toCatalogVariant);
+  return toResult(data.nodes.filter((n): n is VariantNode => n !== null && n.inventoryItem !== undefined));
 };

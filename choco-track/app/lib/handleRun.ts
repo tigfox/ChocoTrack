@@ -25,8 +25,7 @@ export const handleRun = async (
   if (mode !== expectedMode) return reject("This request does not belong on this page.");
 
   // Kit sizes and inventory item ids come from Shopify, never from the browser.
-  const variants = await getVariants(client, [kitId, ...Object.keys(perKit)]);
-  const liveStock = await loadStock(client, variants.map((v) => v.id));
+  const { variants, stock: liveStock } = await getVariants(client, [kitId, ...Object.keys(perKit)]);
   const result = await submitRun(client, {
     mode,
     kit: variants.find((v) => v.id === kitId),

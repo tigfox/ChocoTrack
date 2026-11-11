@@ -1,7 +1,6 @@
 import type { Collection, Location, StockMap } from '../domain/types';
-import { listCollections, listKits, searchVariants, type CatalogVariant, type SearchOptions } from './catalog';
+import { listCollections, listKits, type CatalogVariant } from './catalog';
 import type { GraphqlClient } from './client';
-import { loadStock } from './inventory';
 import { listLocations } from './locations';
 
 export interface Workspace {
@@ -12,19 +11,8 @@ export interface Workspace {
   readonly stock: StockMap;
 }
 
+/** Everything the screens need to start, in a single round trip (the three reads run in parallel). */
 export const loadWorkspace = async (client: GraphqlClient): Promise<Workspace> => {
   const [locations, collections, kits] = await Promise.all([listLocations(client), listCollections(client), listKits(client)]);
-  const stock = await loadStock(client, kits.map((k) => k.id));
-  return { locations, collections, kits, stock };
-};
-
-export interface SearchResult {
-  readonly variants: readonly CatalogVariant[];
-  readonly stock: StockMap;
-}
-
-export const searchWithStock = async (client: GraphqlClient, options: SearchOptions): Promise<SearchResult> => {
-  const variants = await searchVariants(client, options);
-  const stock = await loadStock(client, variants.map((v) => v.id));
-  return { variants, stock };
+  return { locations, collections, kits: kits.variants, stock: kits.stock };
 };
