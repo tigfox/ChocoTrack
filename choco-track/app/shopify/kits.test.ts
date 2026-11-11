@@ -1,5 +1,5 @@
 import { fakeClient } from './fakeClient';
-import { createKit } from './kits';
+import { createKit, updateKit } from './kits';
 
 const product = {
   title: 'Sampler Kit - 5 Pack',
@@ -45,5 +45,59 @@ describe('createKit', () => {
     const client = fakeClient({ productVariants: { nodes: [{ sku: 'OTHER' }] } }, { productSet: { product, userErrors: [] } });
     await createKit(client, { title: 'K', size: 5, sku: 'A"B\\' });
     expect(client.calls[0]?.variables).toEqual({ query: 'sku:"AB"' });
+  });
+});
+
+describe('createKit category', () => {
+  it('stores the category as a collection reference', async () => {
+    const client = fakeClient(noSku, { productSet: { product, userErrors: [] } });
+    await createKit(client, { title: 'K', size: 5, sku: 'S', categoryId: 'gid://shopify/Collection/7' });
+    const input = (client.calls[1]?.variables as { input: { metafields: unknown[] } }).input;
+    expect(input.metafields).toContainEqual({ namespace: 'choco_track', key: 'category', type: 'collection_reference', value: 'gid://shopify/Collection/7' });
+  });
+});
+
+describe('updateKit', () => {
+  const kitProduct = { node: { product: { id: 'gid://shopify/Product/1', tags: ['choco-track-kit'] } } };
+  const ok = { productUpdate: { product: { id: 'gid://shopify/Product/1' }, userErrors: [] } };
+  const edit = { variantId: 'gid://shopify/ProductVariant/1', title: 'New name', size: 12 as const };
+
+  it('updates title, size and category on the product', async () => {
+    const client = fakeClient(kitProduct, ok);
+    await updateKit(client, { ...edit, categoryId: 'gid://shopify/Collection/7' });
+    const input = (client.calls[1]?.variables as { product: Record<string, unknown> }).product;
+    expect(input).toEqual({
+      id: 'gid://shopify/Product/1',
+      title: 'New name',
+      metafields: [
+        { namespace: 'choco_track', key: 'kit_size', type: 'number_integer', value: '12' },
+        { namespace: 'choco_track', key: 'category', type: 'collection_reference', value: 'gid://shopify/Collection/7' },
+      ],
+    });
+    expect(client.calls).toHaveLength(2);
+  });
+  it('removes the category when none is chosen', async () => {
+    const client = fakeClient(kitProduct, ok, { metafieldsDelete: { deletedMetafields: [], userErrors: [] } });
+    await updateKit(client, { ...edit, categoryId: null });
+    const input = (client.calls[1]?.variables as { product: { metafields: { key: string }[] } }).product;
+    expect(input.metafields.map((m) => m.key)).toEqual(['kit_size']);
+    expect(client.calls[2]?.variables).toEqual({
+      metafields: [{ ownerId: 'gid://shopify/Product/1', namespace: 'choco_track', key: 'category' }],
+    });
+  });
+  it('refuses to edit a product that is not a kit', async () => {
+    const client = fakeClient({ node: { product: { id: 'p', tags: ['other'] } } });
+    await expect(updateKit(client, { ...edit, categoryId: null })).rejects.toThrow('That item is not a kit.');
+    expect(client.calls).toHaveLength(1);
+  });
+  it('refuses an id that is not a variant', async () => {
+    const client = fakeClient({ node: null });
+    await expect(updateKit(client, { ...edit, categoryId: null })).rejects.toThrow('That item is not a kit.');
+  });
+  it('surfaces user errors from either write', async () => {
+    const bad = { productUpdate: { product: null, userErrors: [{ message: 'Nope' }] } };
+    await expect(updateKit(fakeClient(kitProduct, bad), { ...edit, categoryId: null })).rejects.toThrow('Nope');
+    const badDelete = { metafieldsDelete: { deletedMetafields: [], userErrors: [{ message: 'Cannot delete' }] } };
+    await expect(updateKit(fakeClient(kitProduct, ok, badDelete), { ...edit, categoryId: null })).rejects.toThrow('Cannot delete');
   });
 });

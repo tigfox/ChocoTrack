@@ -1,5 +1,5 @@
 import type { KitSize } from '../domain/types';
-import { KIT_SIZE_METAFIELD, KIT_TAG, toCatalogVariant, type CatalogVariant, type VariantNode } from './catalog';
+import { CATEGORY_METAFIELD, KIT_SIZE_METAFIELD, KIT_TAG, toCatalogVariant, type CatalogVariant, type VariantNode } from './catalog';
 import type { GraphqlClient } from './client';
 import { assertNoUserErrors, ShopifyApiError, ShopifyUserErrors, type UserError } from './errors';
 
@@ -15,6 +15,7 @@ const CREATE_KIT_MUTATION = `#graphql
         featuredMedia { preview { image { url } } }
         collections(first: 25) { nodes { id } }
         kitSize: metafield(namespace: "${KIT_SIZE_METAFIELD.namespace}", key: "${KIT_SIZE_METAFIELD.key}") { value }
+        category: metafield(namespace: "${CATEGORY_METAFIELD.namespace}", key: "${CATEGORY_METAFIELD.key}") { value }
         variants(first: 1) { nodes { id title sku barcode image { url } inventoryItem { id } } }
       }
       userErrors { field message code }
@@ -29,6 +30,17 @@ export interface NewKit {
   readonly barcode?: string;
   /** Defaults to 0.00; the store team sets the real price in Shopify. */
   readonly price?: string;
+  /** Collection the mix picker starts on. */
+  readonly categoryId?: string;
+}
+
+/** The settings the store team can change on an existing kit. */
+export interface KitUpdate {
+  readonly variantId: string;
+  readonly title: string;
+  readonly size: KitSize;
+  /** null removes the category. */
+  readonly categoryId: string | null;
 }
 
 interface CreateKitData {
@@ -37,6 +49,9 @@ interface CreateKitData {
     userErrors: readonly UserError[];
   };
 }
+
+const sizeMetafield = (size: KitSize) => ({ ...KIT_SIZE_METAFIELD, type: 'number_integer', value: String(size) });
+const categoryMetafield = (id: string) => ({ ...CATEGORY_METAFIELD, type: 'collection_reference', value: id });
 
 const skuTaken = async (client: GraphqlClient, sku: string): Promise<boolean> => {
   const query = `sku:"${sku.replace(/["\\]/g, '')}"`;
@@ -51,7 +66,10 @@ export const createKit = async (client: GraphqlClient, kit: NewKit): Promise<Cat
     title: kit.title,
     status: 'ACTIVE',
     tags: [KIT_TAG],
-    metafields: [{ ...KIT_SIZE_METAFIELD, type: 'number_integer', value: String(kit.size) }],
+    metafields: [
+      sizeMetafield(kit.size),
+      ...(kit.categoryId ? [categoryMetafield(kit.categoryId)] : []),
+    ],
     productOptions: [{ name: 'Title', position: 1, values: [{ name: 'Default Title' }] }],
     variants: [
       {
@@ -69,4 +87,44 @@ export const createKit = async (client: GraphqlClient, kit: NewKit): Promise<Cat
   const variant = variants?.nodes[0];
   if (!variant) throw new ShopifyApiError('Shopify did not return the new kit');
   return toCatalogVariant({ ...variant, product: product as VariantNode['product'] });
+};
+
+const KIT_PRODUCT_QUERY = `#graphql
+  query KitProduct($id: ID!) { node(id: $id) { ... on ProductVariant { product { id tags } } } }
+`;
+
+const UPDATE_KIT_MUTATION = `#graphql
+  mutation UpdateKit($product: ProductUpdateInput!) {
+    productUpdate(product: $product) { product { id } userErrors { field message } }
+  }
+`;
+
+const DELETE_CATEGORY_MUTATION = `#graphql
+  mutation RemoveCategory($metafields: [MetafieldIdentifierInput!]!) {
+    metafieldsDelete(metafields: $metafields) { deletedMetafields { key } userErrors { field message } }
+  }
+`;
+
+const NOT_A_KIT: UserError = { message: 'That item is not a kit.' };
+
+/** Edits an existing kit. The browser sends a variant id; it is only trusted once Shopify says it is a tagged kit. */
+export const updateKit = async (client: GraphqlClient, update: KitUpdate): Promise<void> => {
+  const found = await client<{ node: { product: { id: string; tags: readonly string[] } } | null }>(KIT_PRODUCT_QUERY, {
+    id: update.variantId,
+  });
+  const product = found.node?.product;
+  if (!product || !product.tags.includes(KIT_TAG)) throw new ShopifyUserErrors('Update kit', [NOT_A_KIT]);
+  const { productUpdate } = await client<{ productUpdate: { userErrors: readonly UserError[] } }>(UPDATE_KIT_MUTATION, {
+    product: {
+      id: product.id,
+      title: update.title,
+      metafields: [sizeMetafield(update.size), ...(update.categoryId ? [categoryMetafield(update.categoryId)] : [])],
+    },
+  });
+  assertNoUserErrors('Update kit', productUpdate.userErrors);
+  if (update.categoryId !== null) return;
+  const { metafieldsDelete } = await client<{ metafieldsDelete: { userErrors: readonly UserError[] } }>(DELETE_CATEGORY_MUTATION, {
+    metafields: [{ ownerId: product.id, ...CATEGORY_METAFIELD }],
+  });
+  assertNoUserErrors('Update kit', metafieldsDelete.userErrors);
 };

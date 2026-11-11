@@ -8,7 +8,6 @@ export interface RunModeConfig {
   readonly mode: RunMode;
   readonly pageHeading: string;
   readonly countLabel: string;
-  readonly canCreateKit: boolean;
   /** Assembly flags picker rows whose total demand exceeds stock; breaking down only adds stock. */
   readonly flagShortages: boolean;
   readonly validate: typeof validateAssembly;
@@ -26,7 +25,6 @@ export const RUN_MODES: Readonly<Record<RunMode, RunModeConfig>> = {
     mode: "assemble",
     pageHeading: "Assemble kits",
     countLabel: "Kits to assemble",
-    canCreateKit: true,
     flagShortages: true,
     validate: validateAssembly,
     pickerHeading: (kit) => `Choose the mini bars in each ${kit}`,
@@ -39,7 +37,6 @@ export const RUN_MODES: Readonly<Record<RunMode, RunModeConfig>> = {
     mode: "disassemble",
     pageHeading: "Disassemble kits",
     countLabel: "Kits to break down",
-    canCreateKit: false,
     flagShortages: false,
     validate: validateDisassembly,
     pickerHeading: (kit) => `Choose the mini bars in each ${kit} being broken down`,

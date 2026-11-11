@@ -20,6 +20,8 @@ export interface Variant {
   readonly imageUrl?: string;
   /** Present only on sellable kit variants. */
   readonly kitSize?: KitSize;
+  /** Kits only: the collection the mix picker starts on (for example "Dark chocolate"). */
+  readonly categoryId?: string;
 }
 
 /** variantId -> locationId -> available quantity. A missing location means "not stocked there". */

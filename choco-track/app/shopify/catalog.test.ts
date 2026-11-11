@@ -42,6 +42,11 @@ describe('toCatalogVariant', () => {
     const v = toCatalogVariant(node({ sku: null, barcode: null }));
     expect([v.sku, v.barcode]).toEqual(['', '']);
   });
+  it('reads the kit category (a collection id) when set', () => {
+    expect(toCatalogVariant(node({}, { category: { value: 'gid://shopify/Collection/5' } })).categoryId).toBe('gid://shopify/Collection/5');
+    expect(toCatalogVariant(node({}, { category: null })).categoryId).toBeUndefined();
+    expect(toCatalogVariant(node()).categoryId).toBeUndefined();
+  });
   it('reads the kit size only when valid', () => {
     expect(toCatalogVariant(node({}, { kitSize: { value: '5' } })).kitSize).toBe(5);
     expect(toCatalogVariant(node({}, { kitSize: { value: '7' } })).kitSize).toBeUndefined();

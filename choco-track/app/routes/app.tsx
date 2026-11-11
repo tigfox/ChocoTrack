@@ -20,6 +20,7 @@ export default function App() {
       <s-app-nav>
         <s-link href="/app/assemble">Assemble</s-link>
         <s-link href="/app/disassemble">Disassemble</s-link>
+        <s-link href="/app/settings">Settings</s-link>
       </s-app-nav>
       <Outlet />
     </AppProvider>

@@ -14,7 +14,6 @@ interface Props {
   readonly kitCount: string;
   readonly onKitCount: (v: string) => void;
   readonly countLabel: string;
-  readonly onCreateKit?: () => void;
 }
 
 export function KitFields(p: Props) {
@@ -41,11 +40,6 @@ export function KitFields(p: Props) {
           </s-select>
           <s-number-field label={p.countLabel} min={1} value={p.kitCount} onInput={(e) => p.onKitCount(fieldValue(e))} />
         </s-grid>
-        {p.onCreateKit && (
-          <div>
-            <s-button variant="tertiary" onClick={p.onCreateKit}>Create a new kit</s-button>
-          </div>
-        )}
       </s-stack>
     </s-section>
   );

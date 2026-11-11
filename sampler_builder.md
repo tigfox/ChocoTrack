@@ -140,6 +140,13 @@ Playwright E2E tests on the dev store, security review, error and empty states, 
 - Per-shop rate limiting, if the app goes public.
 - Confirm `application_url`, redirect URLs and webhook `api_version` (`2027-01` from the template) at deploy.
 
+### Store-team feedback round 2 (Done)
+
+- Kit creation moved off the Assemble page to a new **Settings** page (sidebar, under Assemble and Disassemble). Settings lists every kit and lets the store team change its name, size and category, and create a kit.
+- **Category** is optional per kit and is one of the store's existing collections (for example Dark chocolate, Milk chocolate). It is stored on the kit product as the `choco_track.category` collection-reference metafield, so the app still keeps no records of its own. Assembling or disassembling a kit that has one starts the mini-bar list on that collection; staff can still change the filter.
+- Fixed along the way: the "All items" collection option was reported as the text "All items" (an empty `s-option` value is reported by its label), so it was not remembered. Empty choices now use a real value.
+- Browser tests (`npm run test:e2e`, logged-in Chrome over CDP) cover Settings, categories and the filter.
+
 ### Phase 7 - Deploy  *(files built and tested locally; waiting on the Droplet, hostname and GitHub secrets)*
 
 Target: a small DigitalOcean Droplet. Everything is in `deploy/droplet/` with a step-by-step runbook (`README.md`).

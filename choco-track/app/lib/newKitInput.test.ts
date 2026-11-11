@@ -39,3 +39,19 @@ describe('parseNewKit', () => {
     expect(parseNewKit({ title: "T", size: 4, sku: "S", price })).toEqual({ ok: false, error: "Enter a price like 18.00." });
   });
 });
+
+describe('parseNewKit category', () => {
+  const base = { title: 'T', size: 4, sku: 'S' };
+  it('accepts a collection id', () => {
+    expect(parseNewKit({ ...base, categoryId: 'gid://shopify/Collection/12' })).toEqual({
+      ok: true,
+      value: { ...base, categoryId: 'gid://shopify/Collection/12' },
+    });
+  });
+  it('treats an empty category as none', () => {
+    expect(parseNewKit({ ...base, categoryId: '' })).toEqual({ ok: true, value: base });
+  });
+  it.each([['text', 'dark'], ['wrong type of id', 'gid://shopify/Product/1'], ['number', 5]])('rejects %s', (_n, categoryId) => {
+    expect(parseNewKit({ ...base, categoryId })).toEqual({ ok: false, error: 'Choose a valid category.' });
+  });
+});

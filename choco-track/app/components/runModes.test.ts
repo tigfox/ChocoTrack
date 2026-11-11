@@ -17,7 +17,7 @@ describe("assemble mode", () => {
     expect(m.note({ ...base, kitCount: 1 })).toBe("Max buildable with this mix at Warehouse: 4");
   });
   it("allows creating kits and flags shortages", () => {
-    expect([m.canCreateKit, m.flagShortages]).toEqual([true, true]);
+    expect(m.flagShortages).toBe(true);
   });
 });
 
@@ -37,6 +37,6 @@ describe("disassemble mode", () => {
     expect(m.note({ ...base, kitCount: 0 })).toBe("Returns 0 mini bars to stock at Warehouse");
   });
   it("cannot create kits and does not flag shortages", () => {
-    expect([m.canCreateKit, m.flagShortages]).toEqual([false, false]);
+    expect(m.flagShortages).toBe(false);
   });
 });

@@ -1,17 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFetcher } from "react-router";
 import { buildPickList } from "../domain/pickList";
 import { sumUnits } from "../domain/stock";
 import type { StockMap, UnitCounts } from "../domain/types";
 import { useVariantSearch } from "../hooks/useVariantSearch";
-import { defaultCollectionId, pickInitialSelection, readPreferences, writePreferences, type Preferences } from "../lib/preferences";
+import { collectionForKit, defaultCollectionId, pickInitialSelection, readPreferences, writePreferences, type Preferences } from "../lib/preferences";
 import { PAGE_SIZE } from "../lib/searchParams";
 import type { CatalogVariant } from "../shopify/catalog";
 import type { SubmitResult } from "../shopify/submit";
 import type { Workspace } from "../shopify/workspace";
 import type { RunResponse } from "../lib/handleRun";
 import { BoxPreview } from "./BoxPreview";
-import { CreateKitModal } from "./CreateKitModal";
 import { FlavorPicker } from "./FlavorPicker";
 import { KitFields } from "./KitFields";
 import { MixSummary } from "./MixSummary";
@@ -23,8 +22,6 @@ interface Props {
   readonly workspace: Workspace;
   readonly mode: RunMode;
 }
-
-type KitResponse = { ok: true; kit: CatalogVariant } | { ok: false; message: string };
 
 interface Shown {
   readonly result: SubmitResult;
@@ -53,7 +50,7 @@ export function KitRunView({ workspace, mode }: Props) {
   const config = RUN_MODES[mode];
   const initial = pickInitialSelection(workspace.locations, workspace.kits, {});
   const [locationId, setLocationId] = useState(initial.locationId);
-  const [kits, setKits] = useState<readonly CatalogVariant[]>(workspace.kits);
+  const kits = workspace.kits;
   const [kitId, setKitId] = useState(initial.kitId);
   const [kitCountRaw, setKitCountRaw] = useState("1");
   const [perKit, setPerKit] = useState<UnitCounts>({});
@@ -63,7 +60,6 @@ export function KitRunView({ workspace, mode }: Props) {
   const [known, setKnown] = useState<Readonly<Record<string, CatalogVariant>>>(() => index(workspace.kits));
   const [stock, setStock] = useState<StockMap>(workspace.stock);
   const [shown, setShown] = useState<Shown | undefined>();
-  const [creating, setCreating] = useState(false);
   const runId = useRef(crypto.randomUUID());
 
   // Apply what this browser remembered (after mount, so server and client render the same first paint).
@@ -72,14 +68,22 @@ export function KitRunView({ workspace, mode }: Props) {
     const chosen = pickInitialSelection(workspace.locations, workspace.kits, prefs);
     setLocationId(chosen.locationId);
     setKitId(chosen.kitId);
-    setCollectionId(defaultCollectionId(workspace.collections, prefs.collectionId));
+    const remembered = defaultCollectionId(workspace.collections, prefs.collectionId);
+    setCollectionId(collectionForKit(workspace.kits.find((k) => k.id === chosen.kitId), workspace.collections, remembered));
   }, [workspace.locations, workspace.kits, workspace.collections]);
 
   const remember = (update: Preferences) => writePreferences(browserStorage(), update);
 
+  // A kit with a category starts the picker on it. The staff member can still change the filter afterwards.
+  const chooseKit = (id: string) => {
+    setKitId(id);
+    remember({ kitId: id });
+    setCollectionId((current) => collectionForKit(kits.find((k) => k.id === id), workspace.collections, current));
+    setLimit(PAGE_SIZE);
+  };
+
   const search = useVariantSearch(query, collectionId, limit);
   const submitFetcher = useFetcher<RunResponse>();
-  const kitFetcher = useFetcher<KitResponse>();
   const submitting = submitFetcher.state !== "idle";
 
   // Keep every variant we have seen (titles for the summary, ids for the box preview) and its stock.
@@ -125,21 +129,6 @@ export function KitRunView({ workspace, mode }: Props) {
     }
   }, [submitFetcher.data]);
 
-  const createKit = (input: { title: string; size: number; sku: string; barcode: string }) =>
-    kitFetcher.submit(input, { method: "post", action: "/app/api/kits", encType: "application/json" });
-
-  useEffect(() => {
-    const data = kitFetcher.data;
-    if (!data?.ok) return;
-    setKits((prev) => (prev.some((k) => k.id === data.kit.id) ? prev : [...prev, data.kit]));
-    setKnown((prev) => ({ ...prev, [data.kit.id]: data.kit }));
-    setKitId(data.kit.id);
-    writePreferences(browserStorage(), { kitId: data.kit.id });
-    setCreating(false);
-  }, [kitFetcher.data]);
-
-  const closeModal = useCallback(() => setCreating(false), []);
-
   return (
     <s-page heading={config.pageHeading} inlineSize="large">
       <s-stack gap="base">
@@ -150,9 +139,7 @@ export function KitRunView({ workspace, mode }: Props) {
         )}
         {kits.length === 0 && (
           <s-banner tone="warning" heading="No kits yet">
-            {config.canCreateKit
-              ? "Create a kit to get started. A kit is an ordinary product with tracked inventory."
-              : "There are no kits to break down. Kits are created on the Assemble page."}
+            Add a kit on the Settings page to get started. A kit is an ordinary product with tracked inventory.
           </s-banner>
         )}
         {shown && (
@@ -171,14 +158,10 @@ export function KitRunView({ workspace, mode }: Props) {
                 remember({ locationId: id });
               }}
               kitId={kitId}
-              onKit={(id) => {
-                setKitId(id);
-                remember({ kitId: id });
-              }}
+              onKit={chooseKit}
               kitCount={kitCountRaw}
               onKitCount={setKitCountRaw}
               countLabel={config.countLabel}
-              {...(config.canCreateKit ? { onCreateKit: () => setCreating(true) } : {})}
             />
             <FlavorPicker
               heading={config.pickerHeading(kit?.title ?? "kit")}
@@ -226,16 +209,6 @@ export function KitRunView({ workspace, mode }: Props) {
           </s-stack>
         </s-grid>
         <PickListSheet list={pickList} locationName={locationName} perKit={perKit} variants={allVariants} />
-        {config.canCreateKit && (
-          <CreateKitModal
-            open={creating}
-            existing={allVariants}
-            busy={kitFetcher.state !== "idle"}
-            error={kitFetcher.data && !kitFetcher.data.ok ? kitFetcher.data.message : undefined}
-            onClose={closeModal}
-            onCreate={createKit}
-          />
-        )}
       </s-stack>
     </s-page>
   );

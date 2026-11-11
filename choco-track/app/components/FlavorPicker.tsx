@@ -3,6 +3,7 @@ import { parseCount, withCount } from "../domain/counts";
 import { findExactMatch } from "../domain/search";
 import { availableAt } from "../domain/stock";
 import type { Collection, StockMap, UnitCounts, Variant } from "../domain/types";
+import { fromOptionValue, NO_OPTION, toOptionValue } from "../lib/emptyOption";
 import { fieldValue } from "../wc";
 
 interface Props {
@@ -58,8 +59,8 @@ export function FlavorPicker(p: Props) {
               }}
             />
           </div>
-          <s-select label="Collection" value={p.collectionId} onInput={(e) => p.onCollection(fieldValue(e))}>
-            <s-option value="">All items</s-option>
+          <s-select label="Collection" value={toOptionValue(p.collectionId)} onInput={(e) => p.onCollection(fromOptionValue(fieldValue(e)))}>
+            <s-option value={NO_OPTION}>All items</s-option>
             {p.collections.map((c) => (
               <s-option key={c.id} value={c.id}>{c.title}</s-option>
             ))}

@@ -4,6 +4,9 @@ import type { GraphqlClient } from './client';
 /** Namespace/key of the product metafield that marks a product as a sampler kit and holds its size. */
 export const KIT_SIZE_METAFIELD = { namespace: 'choco_track', key: 'kit_size' } as const;
 
+/** Optional kit setting: the collection (category) the mix picker starts on. */
+export const CATEGORY_METAFIELD = { namespace: 'choco_track', key: 'category' } as const;
+
 const KIT_SIZES: readonly number[] = [4, 5, 6, 12];
 
 /** A domain Variant plus the id Shopify needs for inventory calls. */
@@ -29,6 +32,7 @@ const VARIANT_FIELDS = `
     featuredMedia { preview { image { url } } }
     collections(first: 25) { nodes { id } }
     kitSize: metafield(namespace: "${KIT_SIZE_METAFIELD.namespace}", key: "${KIT_SIZE_METAFIELD.key}") { value }
+    category: metafield(namespace: "${CATEGORY_METAFIELD.namespace}", key: "${CATEGORY_METAFIELD.key}") { value }
   }
 `;
 
@@ -69,6 +73,7 @@ export interface VariantNode {
     readonly featuredMedia: { readonly preview: { readonly image: { readonly url: string } | null } | null } | null;
     readonly collections: { readonly nodes: ReadonlyArray<{ readonly id: string }> };
     readonly kitSize: { readonly value: string } | null;
+    readonly category?: { readonly value: string } | null;
   };
 }
 
@@ -100,6 +105,7 @@ const parseKitSize = (raw: string | undefined): KitSize | undefined => {
 export const toCatalogVariant = (node: VariantNode): CatalogVariant => {
   const imageUrl = node.image?.url ?? node.product.featuredMedia?.preview?.image?.url;
   const kitSize = parseKitSize(node.product.kitSize?.value);
+  const categoryId = node.product.category?.value;
   return {
     id: node.id,
     inventoryItemId: node.inventoryItem.id,
@@ -109,6 +115,7 @@ export const toCatalogVariant = (node: VariantNode): CatalogVariant => {
     collectionIds: node.product.collections.nodes.map((c) => c.id),
     ...(imageUrl ? { imageUrl } : {}),
     ...(kitSize ? { kitSize } : {}),
+    ...(categoryId ? { categoryId } : {}),
   };
 };
 
@@ -162,6 +169,7 @@ const KITS_QUERY = `#graphql
         featuredMedia { preview { image { url } } }
         collections(first: 25) { nodes { id } }
         kitSize: metafield(namespace: "${KIT_SIZE_METAFIELD.namespace}", key: "${KIT_SIZE_METAFIELD.key}") { value }
+        category: metafield(namespace: "${CATEGORY_METAFIELD.namespace}", key: "${CATEGORY_METAFIELD.key}") { value }
         variants(first: 10) {
           nodes { id title sku barcode image { url } ${INVENTORY_ITEM} }
         }

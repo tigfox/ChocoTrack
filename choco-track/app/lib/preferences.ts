@@ -53,3 +53,10 @@ export const defaultCollectionId = (
   if (remembered === "" || (remembered !== undefined && collections.some((c) => c.id === remembered))) return remembered;
   return collections.find((c) => /mini/i.test(c.title))?.id ?? "";
 };
+
+/** A kit with a category starts the picker on it; otherwise the remembered or default collection stands. */
+export const collectionForKit = (
+  kit: { readonly categoryId?: string } | undefined,
+  collections: ReadonlyArray<{ readonly id: string }>,
+  fallback: string,
+): string => (kit?.categoryId && collections.some((c) => c.id === kit.categoryId) ? kit.categoryId : fallback);

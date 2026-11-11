@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from "react";
-import type { KitSize, Variant } from "../domain/types";
+import type { Collection, KitSize, Variant } from "../domain/types";
 import { fieldValue } from "../wc";
+import { CategorySelect } from "./CategorySelect";
 
 interface Props {
   readonly open: boolean;
   readonly existing: readonly Variant[];
+  readonly collections: readonly Collection[];
   readonly busy: boolean;
   readonly error?: string | undefined;
   readonly onClose: () => void;
-  readonly onCreate: (kit: { title: string; size: KitSize; sku: string; barcode: string; price: string }) => void;
+  readonly onCreate: (kit: { title: string; size: KitSize; sku: string; barcode: string; price: string; categoryId: string }) => void;
 }
 
 type SizeOption = "4" | "5" | "6" | "12";
@@ -17,13 +19,14 @@ const PRICE = /^\d{1,6}(\.\d{1,2})?$/;
 
 const toSize = (v: string): SizeOption => (v === "4" || v === "5" || v === "12" ? v : "6");
 
-export function CreateKitModal({ open, existing, busy, error: serverError, onClose, onCreate }: Props) {
+export function CreateKitModal({ open, existing, collections, busy, error: serverError, onClose, onCreate }: Props) {
   const ref = useRef<HTMLElementTagNameMap["s-modal"]>(null);
   const [title, setTitle] = useState("");
   const [size, setSize] = useState<SizeOption>("6");
   const [sku, setSku] = useState("");
   const [barcode, setBarcode] = useState("");
   const [price, setPrice] = useState("");
+  const [categoryId, setCategoryId] = useState("");
 
   useEffect(() => {
     const modal = ref.current;
@@ -52,7 +55,7 @@ export function CreateKitModal({ open, existing, busy, error: serverError, onClo
 
   const create = () => {
     if (error) return;
-    onCreate({ title: title.trim(), size: Number(size) as KitSize, sku: trimmedSku, barcode: barcode.trim(), price: price.trim() });
+    onCreate({ title: title.trim(), size: Number(size) as KitSize, sku: trimmedSku, barcode: barcode.trim(), price: price.trim(), categoryId });
   };
 
   useEffect(() => {
@@ -61,6 +64,7 @@ export function CreateKitModal({ open, existing, busy, error: serverError, onClo
       setSku("");
       setBarcode("");
       setPrice("");
+      setCategoryId("");
       setSize("6");
     }
   }, [open]);
@@ -87,6 +91,7 @@ export function CreateKitModal({ open, existing, busy, error: serverError, onClo
           error={price && error?.includes("price") ? error : undefined}
           onInput={(e) => setPrice(fieldValue(e))}
         />
+        <CategorySelect collections={collections} value={categoryId} onChange={setCategoryId} />
         <s-text-field label="Barcode (optional)" value={barcode} onInput={(e) => setBarcode(fieldValue(e))} />
       </s-stack>
       <s-button slot="primary-action" variant="primary" disabled={Boolean(error) || busy} onClick={create}>Create kit</s-button>

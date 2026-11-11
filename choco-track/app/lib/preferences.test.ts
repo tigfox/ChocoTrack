@@ -1,4 +1,4 @@
-import { defaultCollectionId, pickInitialSelection, readPreferences, writePreferences, type StorageLike } from "./preferences";
+import { collectionForKit, defaultCollectionId, pickInitialSelection, readPreferences, writePreferences, type StorageLike } from "./preferences";
 
 const memory = (initial: Record<string, string> = {}): StorageLike & { data: Record<string, string> } => {
   const data = { ...initial };
@@ -75,5 +75,17 @@ describe("defaultCollectionId", () => {
     expect(defaultCollectionId(collections, "b")).toBe("b");
     expect(defaultCollectionId(collections, "gone")).toBe("a");
     expect(defaultCollectionId(collections, "")).toBe("");
+  });
+});
+
+describe('collectionForKit', () => {
+  const collections = [{ id: 'c1', title: 'Milk' }, { id: 'c2', title: 'Dark' }];
+  it('starts on the kit category when the collection exists', () => {
+    expect(collectionForKit({ categoryId: 'c2' }, collections, 'c1')).toBe('c2');
+  });
+  it('falls back when the kit has no category or it no longer exists', () => {
+    expect(collectionForKit({}, collections, 'c1')).toBe('c1');
+    expect(collectionForKit(undefined, collections, 'c1')).toBe('c1');
+    expect(collectionForKit({ categoryId: 'gone' }, collections, 'c1')).toBe('c1');
   });
 });

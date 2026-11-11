@@ -15,8 +15,10 @@ const open = async (path) => {
   await page.bringToFront();
   await page.goto(`${BASE}/${path}`, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => document.querySelector('iframe'), null, { timeout: 30_000 });
-  await app().waitForSelector('s-search-field', { state: 'attached', timeout: 30_000 });
-  await app().waitForSelector('s-button[accessibilitylabel^="Add one"]', { state: 'attached', timeout: 30_000 });
+  const ready = path === 'settings' ? ['s-select[label="Category"]'] : ['s-search-field', 's-button[accessibilitylabel^="Add one"]'];
+  for (const selector of ready) await app().waitForSelector(selector, { state: 'attached', timeout: 30_000 });
+  // The server-rendered HTML appears before React attaches its handlers; events sent too early are lost.
+  await page.waitForTimeout(3_000);
 };
 const text = () => app().locator('body').innerText();
 const kitSize = async () => Number(/exactly (\d+)/.exec(await text())?.[1]);
@@ -99,5 +101,75 @@ describe('Print view', () => {
     });
     await page.emulateMedia({ media: 'screen' });
     assert.ok(visible);
+  });
+});
+
+describe('Collection filter', () => {
+  it('remembers "All items" as no filter', async () => {
+    await open('assemble');
+    await app().locator('s-select[label="Collection"] select').selectOption({ label: 'All items' });
+    await page.waitForTimeout(1_000);
+    assert.equal(await app().locator('s-select[label="Collection"]').evaluate((el) => el.value), 'none');
+    await open('assemble');
+    assert.equal(await app().locator('s-select[label="Collection"]').evaluate((el) => el.value), 'none');
+    await app().locator('s-select[label="Collection"] select').selectOption({ index: 4 });
+  });
+});
+
+describe('Kit settings and categories', () => {
+  const card = () => app().locator('s-section[heading*="6 Pack"]').first();
+  const setField = (selector, value) =>
+    card().locator(selector).evaluate((el, v) => {
+      el.value = v;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    }, value);
+  const categoryId = (title) =>
+    card().locator('s-select[label="Category"]').evaluate((el, t) => [...el.querySelectorAll('s-option')].find((o) => o.textContent.trim() === t)?.value, title);
+  // Saves only when the value differs; Save is disabled for an unchanged form.
+  const ensureCategory = async (value) => {
+    const current = await card().locator('s-select[label="Category"]').evaluate((el) => el.value);
+    if (current === (value || 'none')) return;
+    await setField('s-select[label="Category"]', value || 'none');
+    await save();
+  };
+  const save = async () => {
+    await card().locator('s-button', { hasText: 'Save changes' }).click();
+    await app().waitForFunction(() => /^Saved /.test(document.querySelector('s-banner')?.textContent ?? ''), null, { timeout: 30_000 });
+  };
+  const collectionOnAssemble = async () => {
+    await open('assemble');
+    return app().locator('s-select[label="Collection"]').evaluate((el) => el.value);
+  };
+
+  it('has no create-kit button on Assemble', async () => {
+    await open('assemble');
+    assert.doesNotMatch(await text(), /Create a new kit/);
+  });
+
+  it('lists kits with name, size and category', async () => {
+    await open('settings');
+    assert.match(await text(), /SKU SMP-6/);
+    assert.ok(await app().locator('s-select[label="Category"]').count());
+  });
+
+  it('shows each kit its real size', async () => {
+    await open('settings');
+    const size = await card().locator('s-select[label="Kit size"]').evaluate((el) => el.value);
+    assert.equal(size, '6');
+  });
+
+  it('starts the chooser on the kit category, and stops when it is removed', async () => {
+    await open('settings');
+    const dark = await categoryId('Dark chocolate');
+    assert.ok(dark, 'dev store has a Dark chocolate collection');
+    try {
+      await ensureCategory(dark);
+      // The 6-pack is the default kit, so Assemble should open on the category.
+      assert.equal(await collectionOnAssemble(), dark);
+    } finally {
+      await open('settings');
+      await ensureCategory('');
+    }
+    assert.notEqual(await collectionOnAssemble(), dark);
   });
 });

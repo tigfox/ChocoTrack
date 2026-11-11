@@ -1,5 +1,6 @@
 import type { KitSize } from '../domain/types';
 import type { NewKit } from '../shopify/kits';
+import { CATEGORY_ERROR, parseCategory } from './shopifyIds';
 
 export type ParseKitResult = { readonly ok: true; readonly value: NewKit } | { readonly ok: false; readonly error: string };
 
@@ -15,7 +16,7 @@ const text = (v: unknown, max: number): string | undefined =>
 /** Validates the untrusted JSON posted by the create-kit form. */
 export const parseNewKit = (raw: unknown): ParseKitResult => {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return { ok: false, error: 'Invalid request.' };
-  const { title, size, sku, barcode, price } = raw as Record<string, unknown>;
+  const { title, size, sku, barcode, price, categoryId } = raw as Record<string, unknown>;
   const cleanTitle = text(title, MAX_TITLE);
   if (!cleanTitle) return { ok: false, error: 'Enter a title.' };
   const cleanSku = text(sku, MAX_SKU);
@@ -27,6 +28,8 @@ export const parseNewKit = (raw: unknown): ParseKitResult => {
   if (cleanPrice !== undefined && cleanPrice !== "" && !(typeof cleanPrice === "string" && PRICE.test(cleanPrice))) {
     return { ok: false, error: "Enter a price like 18.00." };
   }
+  const category = parseCategory(categoryId);
+  if (!category.ok) return { ok: false, error: CATEGORY_ERROR };
   return {
     ok: true,
     value: {
@@ -35,6 +38,7 @@ export const parseNewKit = (raw: unknown): ParseKitResult => {
       sku: cleanSku,
       ...(cleanBarcode ? { barcode: cleanBarcode } : {}),
       ...(cleanPrice ? { price: cleanPrice as string } : {}),
+      ...(category.id ? { categoryId: category.id } : {}),
     },
   };
 };
