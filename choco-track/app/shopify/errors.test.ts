@@ -29,3 +29,18 @@ describe('friendlyMessage', () => {
     expect(friendlyMessage(new Error('boom'))).toBe('Something went wrong. Please try again.');
   });
 });
+
+describe('friendlyMessage for inventory tracking', () => {
+  it('explains an edit conflict on targets', () => {
+    const err = new ShopifyUserErrors('Save targets', [{ message: 'stale', code: 'STALE_OBJECT' }]);
+    expect(err.isStaleObject).toBe(true);
+    expect(friendlyMessage(err)).toMatch(/Someone else changed these targets/);
+  });
+  it('is not a stale-object error for other codes', () => {
+    expect(new ShopifyUserErrors('x', [{ message: 'm', code: 'TAKEN' }]).isStaleObject).toBe(false);
+  });
+  it('asks for approval when a permission is missing', () => {
+    const err = new ShopifyApiError('Access denied for inventoryTransfers field. Required access: `read_inventory_transfers` access scope.');
+    expect(friendlyMessage(err)).toMatch(/approve the update/);
+  });
+});

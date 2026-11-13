@@ -122,7 +122,7 @@ export const toCatalogVariant = (node: VariantNode): CatalogVariant => {
 /** Shopify search syntax treats these as operators; users type names, SKUs and scanned barcodes. */
 const OPERATORS = /^(and|or|not)$/i;
 
-const sanitize = (text: string): string =>
+export const sanitize = (text: string): string =>
   text
     .replace(/[^\p{L}\p{N}\s%.\-_]/gu, ' ')
     .split(/\s+/)
@@ -130,7 +130,7 @@ const sanitize = (text: string): string =>
     .filter((token) => token !== '' && !OPERATORS.test(token))
     .join(' ');
 
-const numericId = (gid: string): string => gid.slice(gid.lastIndexOf('/') + 1);
+export const numericId = (gid: string): string => gid.slice(gid.lastIndexOf('/') + 1);
 
 /** Free text matches title, SKU prefix and exact barcode; `collection:` narrows to a collection. */
 export const buildSearchQuery = (text: string, collectionId?: string): string | null => {

@@ -51,7 +51,7 @@ A Shopify app that assembles "sampler kits" from mini chocolate bar inventory, u
 3. **Validation before the mutation.** Every item is tracked and stocked at the chosen location (activate the kit item with `inventoryActivate` if needed). Quantities are whole numbers, units per kit equal the kit size, stock is sufficient, and no component is also the kit. Max buildable is `min(floor(available / qtyPerKit))`.
 4. **Kit creation.** The app creates a product/variant with tracked inventory via `productSet` or `productCreate`, or links an existing variant.
 5. **Search.** `productVariants(query:)` with `sku:` and `barcode:` filters plus collection filtering. Inventory levels come from `inventoryItem.inventoryLevels`.
-6. **Scopes.** `read_products`, `write_products`, `read_inventory`, `write_inventory`, `read_locations`.
+6. **Scopes.** `read_products`, `write_products`, `read_inventory`, `write_inventory`, `read_locations`, plus `read_inventory_transfers` and `write_inventory_transfers` for the Inventory section.
 
 ## Hosting (decided: a DigitalOcean Droplet to start; the options below were the comparison)
 

@@ -1,0 +1,2 @@
+export const chunk = <T>(items: readonly T[], size: number): readonly (readonly T[])[] =>
+  Array.from({ length: Math.ceil(items.length / size) }, (_, i) => items.slice(i * size, (i + 1) * size));

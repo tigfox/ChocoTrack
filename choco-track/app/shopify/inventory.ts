@@ -1,5 +1,6 @@
 import type { InventoryChange, StockMap } from '../domain/types';
 import type { GraphqlClient } from './client';
+import { chunk } from './batch';
 import { assertNoUserErrors, ShopifyApiError, type UserError } from './errors';
 
 const STOCK_BATCH = 100;
@@ -30,9 +31,6 @@ interface StockNode {
     };
   };
 }
-
-const chunk = <T>(items: readonly T[], size: number): readonly (readonly T[])[] =>
-  Array.from({ length: Math.ceil(items.length / size) }, (_, i) => items.slice(i * size, (i + 1) * size));
 
 /** Available quantity per variant per location. A location with no level means "not stocked there". */
 export const loadStock = async (client: GraphqlClient, variantIds: readonly string[]): Promise<StockMap> => {

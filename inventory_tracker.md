@@ -2,7 +2,7 @@
 
 A second section of ChocoTrack, and its main purpose: watch selected inventory against per-location targets, flag what is low, and suggest transfers between locations. The Sampler Builder (`sampler_builder.md`) stays as it is.
 
-**Status (2026-11-13): plan agreed with the store team. Phase I0 (spike) is done and changed one decision: the tracking flag moves from the variant to the product (see below). No application code written yet; Phase I1 (domain logic) is done; Phase I2 (Shopify layer) is next.**
+**Status (2026-11-13): plan agreed with the store team. Phase I0 (spike) is done and changed one decision: the tracking flag moves from the variant to the product (see below). No application code written yet; Phase I1 (domain logic) is done; Phase I2 (Shopify layer) is done; Phase I3 (report UI) is next.**
 
 ## Decisions (from the store team)
 
@@ -75,7 +75,7 @@ How a suggestion is worked out, per tracked variant per destination location:
 |---|---|---|
 | I0 Spike | Done 2026-11-13. See results below. | **Done** |
 | I1 Domain | Done 2026-11-13. Pure, tested logic in `app/domain/`: `targets.ts` (parse, validate, serialize, set), `tracking.ts` (cell status, low-item summary, flagged products without targets), `suggest.ts` (transfer suggestions). 48 new tests, no Shopify calls. | **Done** |
-| I2 Shopify layer | Metafield definitions (created on first use), list tracked variants with quantities per location, set flag, save targets with `compareDigest`, read drafts, create draft transfer. Fake-client tests plus an opt-in live test that creates and deletes a throwaway draft. | **Next** |
+| I2 Shopify layer | Done 2026-11-13. `app/shopify/trackedCatalog.ts` (read the report), `inventoryWrites.ts` (flag, save targets with the conflict guard, create draft transfer, save source locations, search products to flag). Unit tests plus a live test against the dev store. The two transfer scopes are added to the app config. Creating draft transfers could only be unit-tested (the CLI token has no transfer scope); it is verified through the running app. | **Done** |
 | I3 Report UI | Table with locations as columns, search, collection and low-only filters, banner, sidebar count, hidden-location memory, paging. | Not started |
 | I4 Editing | Edit-targets mode, add and remove products, error and conflict messages. | Not started |
 | I5 Suggestions and Settings | Source-location settings, suggested transfers screen, create draft transfer button. | Not started |

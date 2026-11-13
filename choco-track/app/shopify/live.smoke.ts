@@ -3,6 +3,8 @@
 import { execFileSync } from 'node:child_process';
 import { listCollections, listKits, searchVariants } from './catalog';
 import { createKit } from './kits';
+import { findFlaggedProductIds, loadInventoryReport, loadProducts, loadLevels } from './trackedCatalog';
+import { saveVariantTargets, searchProductsForFlag, setProductFlag } from './inventoryWrites';
 import type { GraphqlClient } from './client';
 import { ShopifyApiError } from './errors';
 import { loadStock } from './inventory';
@@ -107,6 +109,51 @@ describe.skipIf(!store)('live dev store', () => {
       await cliClient('mutation($input: ProductDeleteInput!) { productDelete(input: $input) { deletedProductId userErrors { message } } }', {
         input: { id: productId },
       });
+    }
+  }, 240_000);
+
+  // Inventory tracking: flag a product, save and guard targets, read the report. Draft transfers are not covered
+  // here because the CLI token has no transfer scope; they are exercised through the running app.
+  it('flags a product, saves targets with the edit-conflict guard, and reads the report', async () => {
+    const candidates = await searchProductsForFlag(cliClient, { text: 'Rum Caramel' });
+    const candidate = candidates.find((c) => c.title.includes('Rum Caramel'));
+    if (!candidate) throw new Error('seed data missing');
+    const wasTracked = candidate.tracked;
+    const [location] = await listLocations(cliClient);
+    if (!location) throw new Error('no location');
+    await setProductFlag(cliClient, candidate.id, true);
+    try {
+      const [product] = await loadProducts(cliClient, [candidate.id]);
+      const variant = product?.variants[0];
+      if (!variant) throw new Error('no variant');
+      const original = variant.targets;
+      const first = await saveVariantTargets(cliClient, { variantId: variant.id, targets: { [location.id]: { min: 3, max: 9 } }, digest: variant.digest });
+      expect(first.digest).toEqual(expect.any(String));
+      // Editing from an out-of-date digest must be refused, not silently overwrite.
+      await expect(
+        saveVariantTargets(cliClient, { variantId: variant.id, targets: { [location.id]: { min: 1, max: 2 } }, digest: variant.digest ?? 'stale' }),
+      ).rejects.toMatchObject({ isStaleObject: true });
+      const second = await saveVariantTargets(cliClient, { variantId: variant.id, targets: { [location.id]: { min: 4, max: 12 } }, digest: first.digest });
+      const [reloaded] = await loadProducts(cliClient, [candidate.id]);
+      expect(reloaded?.variants[0]?.targets).toEqual({ [location.id]: { min: 4, max: 12 } });
+      expect(reloaded?.variants[0]?.digest).toBe(second.digest);
+      const levels = await loadLevels(cliClient, [variant.id]);
+      expect(Object.values(levels[variant.id] ?? {})[0]).toMatchObject({ available: expect.any(Number), incoming: expect.any(Number) });
+      // Shopify's search index lags a few seconds behind a new flag.
+      const deadline = Date.now() + 90_000;
+      let ids: readonly string[] = [];
+      while (Date.now() < deadline && !ids.includes(candidate.id)) {
+        ids = await findFlaggedProductIds(cliClient);
+        if (!ids.includes(candidate.id)) await new Promise((r) => setTimeout(r, 5_000));
+      }
+      expect(ids).toContain(candidate.id);
+      const report = await loadInventoryReport(cliClient);
+      expect(report.products.map((p) => p.id)).toContain(candidate.id);
+      // Without the transfer scope the report still loads and says why suggestions are hidden.
+      expect(report.draftsError === undefined || /permission/i.test(report.draftsError)).toBe(true);
+      await saveVariantTargets(cliClient, { variantId: variant.id, targets: original, digest: second.digest });
+    } finally {
+      await setProductFlag(cliClient, candidate.id, wasTracked);
     }
   }, 240_000);
 });
