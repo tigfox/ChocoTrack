@@ -55,6 +55,9 @@ export const cellView = (target: Target | undefined, level: LevelCounts | undefi
   };
 };
 
+/** A variant is tracked once it has a target at one or more locations. */
+export const hasTargets = (v: { readonly targets: Targets }): boolean => Object.keys(v.targets).length > 0;
+
 export interface LowSummary {
   /** Variants with at least one low location. */
   readonly variants: number;

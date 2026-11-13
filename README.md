@@ -1,8 +1,9 @@
-# ChocoTrack - Sampler Builder
+# ChocoTrack
 
-A Shopify embedded admin app that assembles and disassembles physical sampler kits (4, 5, 6 and 12 packs) from mini chocolate bar inventory, using one atomic `inventoryAdjustQuantities` call per run. Shopify holds all records; the app stores only OAuth sessions.
+A Shopify embedded admin app with two parts. Shopify holds all records; the app stores only OAuth sessions.
 
-See [`sampler_builder.md`](sampler_builder.md) for the plan, decisions and phase status.
+- **Inventory** (the main purpose): watch selected products against a minimum and maximum per location, flag what is low, and suggest transfers between locations as draft transfers in Shopify. Plan and status: [`inventory_tracker.md`](inventory_tracker.md).
+- **Sampler Builder**: assembles and disassembles physical sampler kits (4, 5, 6 and 12 packs) from mini chocolate bar inventory, using one atomic `inventoryAdjustQuantities` call per run. Plan and status: [`sampler_builder.md`](sampler_builder.md).
 
 | Folder | What |
 |---|---|
@@ -19,14 +20,14 @@ npm install
 shopify app dev        # interactive: choose the dev store, opens the embedded app
 ```
 
-Screens: **Assemble** (`/app/assemble`) and **Disassemble** (`/app/disassemble`). A kit is a product tagged `choco-track-kit` with an integer metafield `choco_track.kit_size` (the app's "Create a new kit" does this for you).
+Screens: **Inventory** (`/app/inventory`, the home page), **Assemble** (`/app/assemble`), **Disassemble** (`/app/disassemble`) and **Settings** (`/app/settings`: kits, categories and transfer source locations). Products are flagged for the Inventory report with the `choco_track.tracked` product metafield and given targets in the `choco_track.targets` variant metafield (both are set from the app). A kit is a product tagged `choco-track-kit` with an integer metafield `choco_track.kit_size` (the app's "Create a new kit" does this for you).
 
 ## Seed a development store
 
 Sample mini bars, kits and collections (made-up stock; dev stores only):
 
 ```bash
-shopify store auth --store <store>.myshopify.com --scopes read_products,write_products,read_inventory,write_inventory,read_locations
+shopify store auth --store <store>.myshopify.com --scopes read_products,write_products,read_inventory,write_inventory,read_locations,read_inventory_transfers,write_inventory_transfers
 node scripts/seed-dev-store.mjs <store>.myshopify.com
 ```
 

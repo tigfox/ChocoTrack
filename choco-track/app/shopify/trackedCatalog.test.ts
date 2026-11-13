@@ -1,6 +1,7 @@
 import { ShopifyApiError } from './errors';
 import { fakeClient } from './fakeClient';
 import {
+  TooManyDraftsError,
   findFlaggedProductIds,
   loadInventoryReport,
   loadLevels,
@@ -119,6 +120,10 @@ describe('loadPendingDrafts', () => {
     const client = fakeClient({ inventoryTransfers: { nodes: [transfer(M, ['other', 9]), transfer(null, ['i1', 4])] } });
     await expect(loadPendingDrafts(client, variants)).resolves.toEqual({});
   });
+  it('refuses to guess when there are more open drafts than one read returns', async () => {
+    const client = fakeClient({ inventoryTransfers: { nodes: [], pageInfo: { hasNextPage: true } } });
+    await expect(loadPendingDrafts(client, variants)).rejects.toBeInstanceOf(TooManyDraftsError);
+  });
   it('skips the call when nothing is tracked', async () => {
     const client = fakeClient();
     await expect(loadPendingDrafts(client, [])).resolves.toEqual({});
@@ -166,6 +171,13 @@ describe('loadInventoryReport', () => {
     const report = await loadInventoryReport(routedClient(routes({ 'query DraftTransfers': denied })));
     expect(report.pending).toEqual({});
     expect(report.draftsError).toMatch(/permission/i);
+    vi.restoreAllMocks();
+  });
+  it('says why suggestions are off when there are too many open drafts', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const many = { inventoryTransfers: { nodes: [], pageInfo: { hasNextPage: true } } };
+    const report = await loadInventoryReport(routedClient(routes({ 'query DraftTransfers': many })));
+    expect(report.draftsError).toMatch(/more than 50 open draft transfers/);
     vi.restoreAllMocks();
   });
   it('makes no product reads when nothing is flagged', async () => {

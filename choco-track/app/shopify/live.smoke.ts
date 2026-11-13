@@ -156,4 +156,18 @@ describe.skipIf(!store)('live dev store', () => {
       await setProductFlag(cliClient, candidate.id, wasTracked);
     }
   }, 240_000);
+
+  // Shopify rejects queries over a cost limit; this reads a full batch (10 products, 25 variants) to prove it fits.
+  it('reads a full batch of products and variants within Shopify\'s query cost limit', async () => {
+    const { products } = await cliClient<{ products: { nodes: ReadonlyArray<{ id: string }> } }>(
+      '{ products(first: 10, query: "title:Mini*") { nodes { id } } }',
+    );
+    expect(products.nodes).toHaveLength(10);
+    const loaded = await loadProducts(cliClient, products.nodes.map((p) => p.id));
+    expect(loaded).toHaveLength(10);
+    const variantIds = loaded.flatMap((p) => p.variants.map((v) => v.id)).slice(0, 25);
+    expect(variantIds.length).toBeGreaterThan(5);
+    const levels = await loadLevels(cliClient, variantIds);
+    expect(Object.keys(levels).length).toBe(variantIds.length);
+  }, 120_000);
 });

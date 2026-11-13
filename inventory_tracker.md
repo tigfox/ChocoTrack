@@ -2,7 +2,7 @@
 
 A second section of ChocoTrack, and its main purpose: watch selected inventory against per-location targets, flag what is low, and suggest transfers between locations. The Sampler Builder (`sampler_builder.md`) stays as it is.
 
-**Status (2026-11-13): plan agreed with the store team. Phase I0 (spike) is done and changed one decision: the tracking flag moves from the variant to the product (see below). No application code written yet; Phase I1 (domain logic) is done; Phase I2 (Shopify layer) is done; Phase I3 (report UI) is next.**
+**Status (2026-11-13): all development for the Inventory section is done and waiting for human testing in the dev store.** Phases I0 to I6 are complete. Nothing has been clicked through in a browser by a person yet; see the test checklist below. Production deploy is still blocked on the Droplet (see `sampler_builder.md`, Phase 7).
 
 ## Decisions (from the store team)
 
@@ -76,10 +76,43 @@ How a suggestion is worked out, per tracked variant per destination location:
 | I0 Spike | Done 2026-11-13. See results below. | **Done** |
 | I1 Domain | Done 2026-11-13. Pure, tested logic in `app/domain/`: `targets.ts` (parse, validate, serialize, set), `tracking.ts` (cell status, low-item summary, flagged products without targets), `suggest.ts` (transfer suggestions). 48 new tests, no Shopify calls. | **Done** |
 | I2 Shopify layer | Done 2026-11-13. `app/shopify/trackedCatalog.ts` (read the report), `inventoryWrites.ts` (flag, save targets with the conflict guard, create draft transfer, save source locations, search products to flag). Unit tests plus a live test against the dev store. The two transfer scopes are added to the app config. Creating draft transfers could only be unit-tested (the CLI token has no transfer scope); it is verified through the running app. | **Done** |
-| I3 Report UI | Table with locations as columns, search, collection and low-only filters, banner, sidebar count, hidden-location memory, paging. | Not started |
-| I4 Editing | Edit-targets mode, add and remove products, error and conflict messages. | Not started |
-| I5 Suggestions and Settings | Source-location settings, suggested transfers screen, create draft transfer button. | Not started |
-| I6 Hardening and deploy | Security pass on the new routes, plan and README updates, scope change in the production app config, deploy with the Droplet release. | Not started |
+| I3 Report UI | Done 2026-11-13. `/app/inventory` (now the app's home page): table with locations as columns, counts, targets, incoming and draft quantities, low/over badges, search, low-only and show-without-targets filters, hide-location checkboxes (remembered per browser), "Show more" paging, banners, sidebar count in the link text. | **Done** |
+| I4 Editing | Done 2026-11-13. **Edit targets** mode with min and max fields per location and per-row Save and Reset; **Add products** dialog to flag and unflag products; edit-conflict, validation and dropped-connection messages. | **Done** |
+| I5 Suggestions and Settings | Done 2026-11-13. **Suggest transfers** dialog (per route and create-all, creating drafts only); **Transfer sources** card on the Settings page with ordering. | **Done** |
+| I6 Hardening | Done 2026-11-13: review of the new routes, live check of Shopify query cost at full batch size, refusal to suggest when draft transfers cannot be fully read, docs. Deploy itself waits for the Droplet; the production config example already lists the new scopes. | **Done (deploy pending)** |
+
+## As built (I2 to I6)
+
+- **Screens:** Inventory (home), Assemble, Disassemble, Settings. The sidebar link reads "Inventory (3)" when three tracked variants are low; the count is looked up in the background and kept for a minute.
+- **Reads** (`app/shopify/trackedCatalog.ts`): flagged product ids from Shopify's search, then products with variants and targets in batches of 10, then available and incoming quantities per location in batches of 25, then the app's own draft transfers, plus the saved source locations. A failure to read drafts never blocks the report: it shows a notice and hides suggestions. More than 50 open drafts from the app also hides suggestions, because some would be missed.
+- **Writes** (`app/shopify/inventoryWrites.ts`, behind one endpoint `/app/api/inventory`): flag or unflag a product, save a variant's targets, save source locations, create draft transfers. Everything the browser sends is validated first (`app/lib/inventoryInput.ts`).
+- **Edit conflicts:** a variant's targets are saved with the version marker they were read with. If someone else saved in between, the save is refused with "Someone else changed these targets. Reload the page..." and nothing is overwritten.
+- **Creating drafts:** the server ignores any quantities from the browser and recomputes the suggestions from fresh Shopify data before creating anything. One draft per route, tagged `choco-track`, with a per-click idempotency key. Drafts are never marked ready by the app.
+- **Flag lag:** Shopify's product search takes about 10 seconds to reflect a flag change. A product flagged or unflagged on screen stays that way across a refresh until the search catches up.
+- **Hidden locations:** hiding a column hides it from the table only. Targets at hidden locations are kept when a row is saved, and alerts and suggestions still count every active location.
+- **Not in v1 (as agreed):** email or Slack alerts, count history, marking transfers ready.
+
+## Checks done without a person
+
+- 462 unit and server-render tests, typecheck, lint and build clean; coverage 99% statements.
+- Live tests against the dev store (`npm run test:live`, 5 tests): flag a product, save targets, prove the edit-conflict guard refuses a stale save, read the report, read a full batch within Shopify's query cost limit, plus the earlier sampler tests. Test data is cleaned up.
+- The running dev server accepts the new routes (they answer with Shopify's sign-in bounce when called without a session).
+
+**Not checked (needs a person):** clicking through the screens, creating a real draft transfer (the CLI token used for live tests has no transfer permission, so this path is covered by unit tests only), and whether the dev store grants the two new transfer scopes without a prompt.
+
+## Human test checklist (dev store)
+
+1. Reload the app. If Shopify asks to approve new permissions (inventory transfers), approve them. The page should open on **Inventory** and look empty ("Nothing is tracked yet").
+2. **Add products**: search for "Rum Caramel" and click **Track**. The table should switch to edit mode with that product's variants showing.
+3. Enter a minimum and maximum for two locations (for example min 30, max 100) and click **Save** on the row. Reload: the targets stay. Try min 50, max 10: you should get a message and nothing is saved.
+4. Make a stock level fall below its minimum (adjust inventory in Shopify), click **Refresh**: the cell shows **Low**, a red banner appears at the top, and the sidebar link shows a count within about a minute.
+5. On **Settings**, add a source location (for example Warehouse) under **Transfer sources** and **Save sources**.
+6. Back on Inventory click **Suggest transfers**. You should see a route like Warehouse to Market Store with quantities that take the destination up to its maximum without taking the warehouse below its own minimum. Click **Create draft in Shopify**, then open Transfers in Shopify: a draft tagged `choco-track` should exist. Back in the app the cell now shows "+N in draft" and the suggestion is gone.
+7. Open the same variant in two browser tabs, save different targets in each: the second save should be refused with the "Someone else changed these targets" message.
+8. Hide a location with its checkbox: the column disappears and the targets for it are still there when you show it again.
+9. Check the sampler screens still work (Assemble, Disassemble, Settings kits).
+
+Please report anything that looks wrong; the likeliest trouble spots are the table layout in the Shopify admin (column widths and the sticky left column) and the exact wording of messages.
 
 ## Phase I1 behavior (as built)
 

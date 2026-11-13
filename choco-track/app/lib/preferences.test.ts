@@ -89,3 +89,23 @@ describe('collectionForKit', () => {
     expect(collectionForKit({ categoryId: 'gone' }, collections, 'c1')).toBe('c1');
   });
 });
+
+describe('hidden locations', () => {
+  const store = () => {
+    const data = new Map<string, string>();
+    return { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => void data.set(k, v) };
+  };
+  it('remembers hidden location ids alongside the other choices', () => {
+    const s = store();
+    writePreferences(s, { kitId: 'k' });
+    writePreferences(s, { hiddenLocationIds: ['L1', 'L2'] });
+    expect(readPreferences(s)).toEqual({ kitId: 'k', hiddenLocationIds: ['L1', 'L2'] });
+  });
+  it('ignores a malformed list', () => {
+    const s = store();
+    s.setItem('choco-track:prefs', JSON.stringify({ hiddenLocationIds: 'L1' }));
+    expect(readPreferences(s)).toEqual({});
+    s.setItem('choco-track:prefs', JSON.stringify({ hiddenLocationIds: ['L1', 5] }));
+    expect(readPreferences(s)).toEqual({ hiddenLocationIds: ['L1'] });
+  });
+});

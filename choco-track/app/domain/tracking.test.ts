@@ -1,4 +1,4 @@
-import { cellView, lowSummary, productsWithoutTargets, type FlaggedProduct, type TrackedVariant } from './tracking';
+import { cellView, hasTargets, lowSummary, productsWithoutTargets, type FlaggedProduct, type TrackedVariant } from './tracking';
 
 const W = 'gid://shopify/Location/1';
 const M = 'gid://shopify/Location/2';
@@ -79,5 +79,12 @@ describe('productsWithoutTargets', () => {
       { id: 'p1', title: 'One' },
       { id: 'p3', title: 'Three' },
     ]);
+  });
+});
+
+describe('hasTargets', () => {
+  it('is true once any location has a target', () => {
+    expect(hasTargets({ targets: {} })).toBe(false);
+    expect(hasTargets({ targets: { [W]: { min: 0, max: 1 } } })).toBe(true);
   });
 });

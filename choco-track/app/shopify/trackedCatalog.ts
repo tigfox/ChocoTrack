@@ -3,6 +3,7 @@ import { parseTargets } from '../domain/targets';
 import type { LevelMap, PendingMap, TrackedVariant } from '../domain/tracking';
 import { logError } from '../lib/logError';
 import { chunk } from './batch';
+import { friendlyMessage } from './errors';
 import type { GraphqlClient } from './client';
 import { listLocations } from './locations';
 
@@ -198,9 +199,19 @@ export const loadLevels = async (client: GraphqlClient, variantIds: readonly str
   );
 };
 
+const DRAFT_PAGE = 50;
+
+export class TooManyDraftsError extends Error {
+  constructor() {
+    super(`There are more than ${DRAFT_PAGE} open draft transfers from this app. Mark or delete some in Shopify so none are missed.`);
+    this.name = 'TooManyDraftsError';
+  }
+}
+
 const DRAFTS_QUERY = `#graphql
   query DraftTransfers($query: String!) {
-    inventoryTransfers(first: 50, query: $query) {
+    inventoryTransfers(first: ${DRAFT_PAGE}, query: $query) {
+      pageInfo { hasNextPage }
       nodes {
         destination { location { id } }
         lineItems(first: 100) { nodes { inventoryItem { id } totalQuantity } }
@@ -211,6 +222,7 @@ const DRAFTS_QUERY = `#graphql
 
 interface DraftsData {
   inventoryTransfers: {
+    pageInfo?: { hasNextPage: boolean };
     nodes: ReadonlyArray<{
       destination: { location: { id: string } | null } | null;
       lineItems: { nodes: ReadonlyArray<{ inventoryItem: { id: string } | null; totalQuantity: number }> };
@@ -226,6 +238,7 @@ export const loadPendingDrafts = async (
   if (variants.length === 0) return {};
   const variantByItem = new Map(variants.map((v) => [v.inventoryItemId, v.id]));
   const data = await client<DraftsData>(DRAFTS_QUERY, { query: `status:draft tag:${TRANSFER_TAG}` });
+  if (data.inventoryTransfers.pageInfo?.hasNextPage) throw new TooManyDraftsError();
   const lines = data.inventoryTransfers.nodes.flatMap((t) => {
     const destinationId = t.destination?.location?.id;
     return destinationId
@@ -263,8 +276,8 @@ export const loadSourceIds = async (client: GraphqlClient): Promise<readonly str
   }
 };
 
-const DRAFTS_UNAVAILABLE =
-  "Draft transfers couldn't be read, so transfer suggestions are hidden. The app may need the inventory transfer permission: reopen the app from Shopify and approve it.";
+const draftsUnavailable = (err: unknown): string =>
+  `Draft transfers couldn't be read, so transfer suggestions are hidden. ${err instanceof TooManyDraftsError ? err.message : friendlyMessage(err)}`;
 
 /** Everything the Inventory screen needs, read with as much parallelism as the dependencies allow. */
 export const loadInventoryReport = async (client: GraphqlClient): Promise<InventoryReport> => {
@@ -280,7 +293,7 @@ export const loadInventoryReport = async (client: GraphqlClient): Promise<Invent
       (pending) => ({ pending, error: undefined as string | undefined }),
       (err: unknown) => {
         logError('draft transfers could not be read', err);
-        return { pending: {} as PendingMap, error: DRAFTS_UNAVAILABLE };
+        return { pending: {} as PendingMap, error: draftsUnavailable(err) };
       },
     ),
   ]);

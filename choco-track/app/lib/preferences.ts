@@ -9,6 +9,8 @@ export interface Preferences {
   readonly kitId?: string;
   /** An empty string means "All items". */
   readonly collectionId?: string;
+  /** Inventory report columns this browser has hidden. */
+  readonly hiddenLocationIds?: readonly string[];
 }
 
 const KEY = "choco-track:prefs";
@@ -21,7 +23,11 @@ export const readPreferences = (storage: StorageLike | undefined): Preferences =
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return {};
     const record = parsed as Record<string, unknown>;
-    return Object.fromEntries(FIELDS.flatMap((f) => (typeof record[f] === "string" ? [[f, record[f]]] : [])));
+    const hidden = record.hiddenLocationIds;
+    return {
+      ...Object.fromEntries(FIELDS.flatMap((f) => (typeof record[f] === "string" ? [[f, record[f]]] : []))),
+      ...(Array.isArray(hidden) ? { hiddenLocationIds: hidden.filter((id): id is string => typeof id === "string") } : {}),
+    };
   } catch {
     return {};
   }

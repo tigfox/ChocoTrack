@@ -4,6 +4,7 @@ import { sumUnits } from "../domain/stock";
 import type { StockMap, UnitCounts } from "../domain/types";
 import { useVariantSearch } from "../hooks/useVariantSearch";
 import { collectionForKit, defaultCollectionId, pickInitialSelection, readPreferences, writePreferences, type Preferences } from "../lib/preferences";
+import { browserStorage } from "../lib/browserStorage";
 import { fetchJson } from "../lib/fetchJson";
 import { PAGE_SIZE } from "../lib/searchParams";
 import type { CatalogVariant } from "../shopify/catalog";
@@ -28,14 +29,6 @@ interface Shown {
   readonly label: string;
   readonly locationName: string;
 }
-
-const browserStorage = (): Storage | undefined => {
-  try {
-    return window.localStorage;
-  } catch {
-    return undefined;
-  }
-};
 
 const index = (variants: readonly CatalogVariant[]): Readonly<Record<string, CatalogVariant>> =>
   Object.fromEntries(variants.map((v) => [v.id, v]));

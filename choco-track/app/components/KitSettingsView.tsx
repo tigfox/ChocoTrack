@@ -3,12 +3,14 @@ import { useSettingsAction } from "../hooks/useSettingsAction";
 import type { Workspace } from "../shopify/workspace";
 import { CreateKitModal } from "./CreateKitModal";
 import { KitSettingsCard } from "./KitSettingsCard";
+import { SourceLocationsCard } from "./SourceLocationsCard";
 
 interface Props {
   readonly workspace: Workspace;
+  readonly sourceIds: readonly string[];
 }
 
-export function KitSettingsView({ workspace }: Props) {
+export function KitSettingsView({ workspace, sourceIds }: Props) {
   const [creating, setCreating] = useState(false);
   const { busy, response, submit } = useSettingsAction();
   const closeModal = useCallback(() => setCreating(false), []);
@@ -32,6 +34,7 @@ export function KitSettingsView({ workspace }: Props) {
         {workspace.kits.map((kit) => (
           <KitSettingsCard key={kit.id} kit={kit} collections={workspace.collections} />
         ))}
+        <SourceLocationsCard locations={workspace.locations} sourceIds={sourceIds} />
         <CreateKitModal
           open={creating}
           existing={workspace.kits}
