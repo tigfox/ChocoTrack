@@ -2,7 +2,7 @@
 
 A second section of ChocoTrack, and its main purpose: watch selected inventory against per-location targets, flag what is low, and suggest transfers between locations. The Sampler Builder (`sampler_builder.md`) stays as it is.
 
-**Status (2026-11-13): plan agreed with the store team. Phase I0 (spike) is done and changed one decision: the tracking flag moves from the variant to the product (see below). No application code written yet; Phase I1 is next.**
+**Status (2026-11-13): plan agreed with the store team. Phase I0 (spike) is done and changed one decision: the tracking flag moves from the variant to the product (see below). No application code written yet; Phase I1 (domain logic) is done; Phase I2 (Shopify layer) is next.**
 
 ## Decisions (from the store team)
 
@@ -74,12 +74,19 @@ How a suggestion is worked out, per tracked variant per destination location:
 | Phase | Work | State |
 |---|---|---|
 | I0 Spike | Done 2026-11-13. See results below. | **Done** |
-| I1 Domain | Parse and validate targets (whole numbers, `0 <= min <= max`), cell status, low-item counts, suggestion engine with source surplus and shortfalls. | **Next** |
-| I2 Shopify layer | Metafield definitions (created on first use), list tracked variants with quantities per location, set flag, save targets with `compareDigest`, read drafts, create draft transfer. Fake-client tests plus an opt-in live test that creates and deletes a throwaway draft. | Not started |
+| I1 Domain | Done 2026-11-13. Pure, tested logic in `app/domain/`: `targets.ts` (parse, validate, serialize, set), `tracking.ts` (cell status, low-item summary, flagged products without targets), `suggest.ts` (transfer suggestions). 48 new tests, no Shopify calls. | **Done** |
+| I2 Shopify layer | Metafield definitions (created on first use), list tracked variants with quantities per location, set flag, save targets with `compareDigest`, read drafts, create draft transfer. Fake-client tests plus an opt-in live test that creates and deletes a throwaway draft. | **Next** |
 | I3 Report UI | Table with locations as columns, search, collection and low-only filters, banner, sidebar count, hidden-location memory, paging. | Not started |
 | I4 Editing | Edit-targets mode, add and remove products, error and conflict messages. | Not started |
 | I5 Suggestions and Settings | Source-location settings, suggested transfers screen, create draft transfer button. | Not started |
 | I6 Hardening and deploy | Security pass on the new routes, plan and README updates, scope change in the production app config, deploy with the Droplet release. | Not started |
+
+## Phase I1 behavior (as built)
+
+- **Targets:** whole numbers with `0 <= min <= max <= 1,000,000`. Saved JSON is read leniently (bad entries dropped, never an error) and written with sorted keys, so the same targets always produce the same text. No targets left means the metafield is removed.
+- **Cell status:** `low` when available is below the minimum, `over` above the maximum, `ok` otherwise (both bounds inclusive), `untracked` when there is no target. A location that does not stock the item counts as 0 available, so it is low whenever the minimum is above 0. A low cell is marked **covered** when incoming plus pending stock reach the minimum, so the report can say "low, restock on the way".
+- **Alert summary:** counts variants with any low location, low cells, and variants not yet covered. The sidebar count uses the variant count.
+- **Suggestions:** per variant and destination, if `available + incoming + pending` is below the minimum, the need is `max - that total`. Sources are tried in the configured order, and each can give only what it has above its own minimum. A source with no target for the variant can give all of its stock, so give every source a target if it should keep a floor. Source locations are never destinations, even when low. Destinations are served in location order, so an earlier one gets first call on a shared source. What no source can cover is reported as a **shortfall**, flagged when the destination is still below its minimum afterwards. One suggested transfer per origin and destination, with a line per variant.
 
 ## Phase I0 results (2026-11-13, dev store)
 
