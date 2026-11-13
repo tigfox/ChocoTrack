@@ -2,15 +2,15 @@
 
 A second section of ChocoTrack, and its main purpose: watch selected inventory against per-location targets, flag what is low, and suggest transfers between locations. The Sampler Builder (`sampler_builder.md`) stays as it is.
 
-**Status (2026-11-13): plan agreed with the store team; no code written yet.** Phase I0 is next.
+**Status (2026-11-13): plan agreed with the store team. Phase I0 (spike) is done and changed one decision: the tracking flag moves from the variant to the product (see below). No application code written yet; Phase I1 is next.**
 
 ## Decisions (from the store team)
 
 | Area | Decision |
 |---|---|
 | Purpose | Track selected inventory per location, show low stock, and suggest transfers. |
-| Unit tracked | A **variant** (each variant has its own inventory record). One flavor can have a Full variant (about 400 bars) and a Mini variant (about 2000) with separate targets. The real store mixes variants and separate products; both work because every row is a variant. |
-| Selection | A private **variant metafield flag** `choco_track.tracked` (true/false). Staff flag variants in the app or in the Shopify admin. Hidden from customers. |
+| Unit tracked | A **variant** (each variant has its own inventory record). One flavor can have a Full variant (about 400 bars) and a Mini variant (about 2000) with separate counts and targets. The real store mixes variants and separate products; both work because every row is a variant. |
+| Selection | A private **product metafield flag** `choco_track.tracked` (true/false), set from the app or the Shopify admin, hidden from customers. Shopify can only search by a metafield on products, not on variants (found in Phase I0), so the flag sits on the product. A variant is **tracked** once it has a target at one or more locations, so Full and Mini variants of the same flavor are still tracked separately: set targets on the Mini variant and leave the Full variant empty if only minis matter. |
 | Targets | A **minimum and maximum per variant per location**, in a variant metafield `choco_track.targets` (JSON, keyed by location id). No app database for business data. |
 | Count shown | **Available**, with **incoming** (stock in transit) shown beside it. Low means available is below the minimum. |
 | Alerts | **In the app only**: a banner on the Inventory page and a count on the sidebar link. No email, Slack or background jobs in v1. |
@@ -40,7 +40,8 @@ Rum Caramel - Mini             |  2100 min 1500/2500| ...
 - Cell state: **low** (below minimum, critical tone), **ok**, **over max** (subdued note), and **not tracked here** (dash) when no target is set for that location.
 - Left column stays visible when scrolling across locations. Rows are grouped under the product name when a product has several tracked variants.
 - An **Edit targets** mode swaps each cell for two number fields (min, max). Changes save per row.
-- **Add products** opens a search (name, SKU, barcode, collection filter) with checkboxes that flag or unflag variants.
+- **Add products** opens a search (name, SKU, barcode, collection filter) with checkboxes that flag or unflag products, then shows that product's variants so targets can be set. Variants of a flagged product that have no targets are hidden by default; a **Show variants without targets** toggle reveals them.
+- A product flagged a few seconds ago may not appear in Shopify's search yet (about 10 seconds). The app adds it to the table straight away so nothing looks lost.
 
 ## Screen: Suggested transfers
 
@@ -59,11 +60,12 @@ How a suggestion is worked out, per tracked variant per destination location:
 
 ## Technical design
 
-- **Reads:** `productVariants` with each variant's `inventoryItem.inventoryLevels` quantities (`available`, `incoming`) per location, the two metafields, product title and image. Paged, then filtered to tracked variants on our side if Shopify cannot filter by a variant metafield (see risks).
-- **Writes:** `metafieldsSet` for the flag and targets. The targets JSON is edited with `compareDigest` so two people editing the same variant cannot silently overwrite each other (the second gets a "changed, reload" message, like the stale-stock check in the sampler).
+- **Reads:** `products(query: "metafields.choco_track.tracked:true")` (needs the flag definition to be filterable, which the app creates on first use), with each product's variants, their `inventoryItem.inventoryLevels` quantities (`available`, `incoming`) per location, and the targets metafield, in one paged query. Then keep only variants that have targets.
+- **Writes:** `metafieldsSet` for the product flag and the variant targets. The targets JSON is edited with `compareDigest` so two people editing the same variant cannot silently overwrite each other (the second gets a "changed, reload" message, like the stale-stock check in the sampler).
 - **Transfers:** `inventoryTransferCreate`, which makes a **draft** and needs the `write_inventory_transfers` scope. In API 2026-07 it requires an idempotency key, so one key per click prevents double-creating. Drafts are read back with `inventoryTransfers` for the pending quantities.
 - **Alerts:** computed when the page loads from the same read, so there is no scheduler. The sidebar count is computed in the app layout and cached briefly (about 60 seconds, in memory) so every page view does not cost a full read.
-- **New scope:** `write_inventory_transfers` (and read access to transfers). Existing scopes already cover inventory and products. The store team approves it when the app updates, as with the earlier scope changes.
+- **New scopes:** `read_inventory_transfers` and `write_inventory_transfers`. Reading transfers is denied without the read scope (confirmed in I0). Existing scopes already cover inventory and products. The dev store did not prompt for permissions on the earlier scope change; confirm the same here in I2. At production deploy the store team approves them.
+- **Sidebar count:** Shopify's nav accepts plain links only (no badge), so the count goes in the link text, for example "Inventory (5)".
 - **Same rules as the sampler:** the server never trusts ids or numbers from the browser (validated input, 64 KB body cap), errors show next to the person's work instead of replacing the page (`fetchJson`), and logs hold only error name and message.
 - **Domain code stays pure and tested first:** targets parsing, status per cell, alert counts, and the suggestion engine live in `app/domain/` with no Shopify imports.
 
@@ -71,17 +73,30 @@ How a suggestion is worked out, per tracked variant per destination location:
 
 | Phase | Work | State |
 |---|---|---|
-| I0 Spike | Confirm against the dev store: (a) can `productVariants` be filtered by the variant metafield `tracked`; (b) does the sidebar link support a count badge; (c) the new scope is granted after a dev update. Settles the fallbacks below. | Not started |
-| I1 Domain | Parse and validate targets (whole numbers, `0 <= min <= max`), cell status, low-item counts, suggestion engine with source surplus and shortfalls. | Not started |
+| I0 Spike | Done 2026-11-13. See results below. | **Done** |
+| I1 Domain | Parse and validate targets (whole numbers, `0 <= min <= max`), cell status, low-item counts, suggestion engine with source surplus and shortfalls. | **Next** |
 | I2 Shopify layer | Metafield definitions (created on first use), list tracked variants with quantities per location, set flag, save targets with `compareDigest`, read drafts, create draft transfer. Fake-client tests plus an opt-in live test that creates and deletes a throwaway draft. | Not started |
 | I3 Report UI | Table with locations as columns, search, collection and low-only filters, banner, sidebar count, hidden-location memory, paging. | Not started |
 | I4 Editing | Edit-targets mode, add and remove products, error and conflict messages. | Not started |
 | I5 Suggestions and Settings | Source-location settings, suggested transfers screen, create draft transfer button. | Not started |
 | I6 Hardening and deploy | Security pass on the new routes, plan and README updates, scope change in the production app config, deploy with the Droplet release. | Not started |
 
+## Phase I0 results (2026-11-13, dev store)
+
+| Question | Result |
+|---|---|
+| Can variants be searched by a variant metafield? | **No.** Shopify refuses the "filterable" setting on variant metafield definitions, and a variant search with a metafield filter silently ignores it and returns unrelated variants. So the flag cannot live on the variant. |
+| Can products be searched by a product metafield? | **Yes**, once the definition is created as filterable: the filter returned exactly the flagged product. A newly set flag took about 10 seconds to appear in search. |
+| Are incoming quantities readable? | **Yes.** `available`, `incoming` and `on_hand` come back per location in the same read as the variants. |
+| Can transfers be read or created? | Reading is denied without `read_inventory_transfers`; creating needs `write_inventory_transfers` (and, from API 2026-04, an idempotency key). Both scopes will be added. |
+| Can the sidebar link show a count badge? | **Not documented.** The nav is plain links; the count goes in the link text. |
+| Is the new scope granted automatically in the dev store? | **Not yet checked.** It needs the app to change scopes, which I held back until code uses it. Confirm in I2. |
+
+The spike created and deleted its test definitions and metafields; the dev store has no leftovers.
+
 ## Risks and open items
 
-- **Variant metafield filter (checked in I0).** Shopify documents filtering by `metafields.{namespace}.{key}:{value}`, but earlier in this project variant search by metafield did not work. Fallbacks, in order: filter on a product-level mirror flag the app maintains; or read all variants in a collection and filter ourselves. With 100 to 500 tracked variants any of these is workable, but the read gets heavier.
+- **Flag on the product, targets on the variant.** A flagged product's variants all appear as candidates; only those with targets are tracked. If staff flag a product but never set targets, it shows nothing by default, so the report explains this with a banner ("2 flagged products have no targets yet").
 - **Pending drafts.** Draft transfers do not count as incoming until marked ready, so the app adds its own drafts to the pending quantity. Drafts made by hand in Shopify are not counted unless tagged.
 - **Source can itself be low.** Suggestions never take a source below its own minimum, so a low source simply shows a shortfall.
 - **Deleted or renamed locations.** Targets for a location that no longer exists are ignored; they are never deleted automatically.
