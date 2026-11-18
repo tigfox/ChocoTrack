@@ -12,7 +12,7 @@ Internet -> Caddy (80/443, automatic HTTPS) -> ChocoTrack app (port 3000, intern
 
 ## Sizing
 
-A Basic Droplet with 1 vCPU and 1-2 GB RAM, running Ubuntu 24.04 LTS, is enough for a handful of staff. 2 GB gives comfortable headroom; 1 GB works because `bootstrap.sh` adds swap. Check current prices on DigitalOcean's pricing page (roughly $6-12/month at the time of writing, from memory). Add DigitalOcean backups (about 20% extra) if you want whole-VM snapshots on top of the database backup below.
+A Basic Droplet with 1 vCPU and 1-2 GB RAM, running Ubuntu 24.04 or 26.04 LTS, is enough for a handful of staff. 2 GB gives comfortable headroom; 1 GB works because `bootstrap.sh` adds swap. The stack was smoke-tested on a **512 MB** Ubuntu 26.04.1 Droplet (2026-11-17): it runs, but with the app idle about 190 MB of the 1 GB swap was already in use, so pick 1 GB or more for real use. Check current prices on DigitalOcean's pricing page (roughly $6-12/month at the time of writing, from memory). Add DigitalOcean backups (about 20% extra) if you want whole-VM snapshots on top of the database backup below.
 
 ## One-time setup
 
@@ -44,6 +44,8 @@ ssh-keyscan -t ed25519 <droplet-ip-or-hostname>   # copy this output for DROPLET
 Keep `chocotrack-deploy` (private key) out of the repo; it goes into a GitHub secret and nowhere else.
 
 ### 4. Put the configuration on the Droplet
+
+Keep `/opt/chocotrack/data` owned by uid 1000 (the app's user). Do not run a recursive `chown deploy:deploy` over `/opt/chocotrack`: the app then exits with "/data is not writable by uid 1000". Fix with `chown 1000:1000 /opt/chocotrack/data`.
 
 ```bash
 scp deploy/droplet/{docker-compose.yml,Caddyfile,deploy.sh,backup.sh,.env.example} deploy@<droplet>:/opt/chocotrack/

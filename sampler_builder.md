@@ -17,7 +17,7 @@ A Shopify app that assembles "sampler kits" from mini chocolate bar inventory, u
 | 6 Hardening | Done (see below for what stays open) |
 | Feedback round 2 (Settings page, kit categories) | Done |
 | Error and edge-case pass | Done |
-| 7 Deploy | Files built and tested locally; **blocked on the store team** (Droplet, hostname, GitHub secrets, production Shopify app) |
+| 7 Deploy | Files built and tested locally. **Hosting smoke test passed 2026-11-17** on a 512 MB Ubuntu 26.04 Droplet (192.241.157.72): bootstrap, image pull, healthy app, automatic HTTPS at `192-241-157-72.sslip.io`. Still needed from the store team: the production Shopify app (API key and secret), the four GitHub secrets, and a real hostname |
 
 **Next, in order:** (1) store team provisions the Droplet and gives the hostname, then the production-readiness pass (real URLs, webhook version, `shopify app deploy --config production`); (2) optional fake-Shopify browser suite in CI; (3) confirm with the store team whether the screens now feel faster, then talk about deferred features.
 
