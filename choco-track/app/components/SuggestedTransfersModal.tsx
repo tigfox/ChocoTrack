@@ -5,6 +5,7 @@ import { useModal } from "../hooks/useModal";
 import type { CreatedTransfer, InventoryResponse } from "../lib/handleInventory";
 import { variantLabel } from "../lib/reportRows";
 import type { ReportVariant } from "../shopify/trackedCatalog";
+import { CreatedTransferLinks } from "./CreatedTransferLinks";
 
 interface Props {
   readonly open: boolean;
@@ -12,14 +13,17 @@ interface Props {
   readonly locations: readonly Location[];
   readonly variants: readonly ReportVariant[];
   readonly hasSources: boolean;
+  /** The store name, for links to the created drafts. */
+  readonly shopHandle?: string;
   readonly onClose: () => void;
   readonly onCreate: (route: { originId: string; destinationId: string } | undefined) => Promise<InventoryResponse>;
   readonly onCreated: (created: readonly CreatedTransfer[]) => void;
 }
 
-export function SuggestedTransfersModal({ open, plan, locations, variants, hasSources, onClose, onCreate, onCreated }: Props) {
+export function SuggestedTransfersModal({ open, plan, locations, variants, hasSources, shopHandle, onClose, onCreate, onCreated }: Props) {
   const ref = useModal(open, onClose);
   const [busy, setBusy] = useState<string | undefined>();
+  const [createdDrafts, setCreatedDrafts] = useState<readonly CreatedTransfer[]>([]);
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | undefined>();
   const locationName = (id: string) => locations.find((l) => l.id === id)?.name ?? id;
   const labelOf = (variantId: string) => {
@@ -33,7 +37,11 @@ export function SuggestedTransfersModal({ open, plan, locations, variants, hasSo
     const result = await onCreate(route);
     setBusy(undefined);
     setNotice({ ok: result.ok, text: result.message });
-    if (result.ok && result.created) onCreated(result.created);
+    if (result.ok && result.created) {
+      const made = result.created;
+      setCreatedDrafts((prev) => [...prev, ...made]);
+      onCreated(made);
+    }
   };
 
   return (
@@ -41,8 +49,10 @@ export function SuggestedTransfersModal({ open, plan, locations, variants, hasSo
       <s-stack gap="base">
         {notice && <s-banner tone={notice.ok ? "success" : "critical"}>{notice.text}</s-banner>}
         <s-paragraph color="subdued">
-          Each button creates a draft transfer in Shopify. Nothing moves until someone reviews the draft there and marks it ready.
+          Each button creates a draft transfer in Shopify. Nothing moves until someone reviews the draft there and marks it ready. Quantities follow the pack
+          sizes on the Settings page.
         </s-paragraph>
+        <CreatedTransferLinks created={createdDrafts} locations={locations} shopHandle={shopHandle} />
         {!hasSources && (
           <s-banner tone="warning" heading="No source locations set">
             Choose the locations that supply stock on the Settings page to get transfer suggestions.
@@ -57,7 +67,10 @@ export function SuggestedTransfersModal({ open, plan, locations, variants, hasSo
             <s-section key={key} heading={`${locationName(t.originId)} to ${locationName(t.destinationId)}`}>
               <s-stack gap="small-200">
                 {t.lines.map((l) => (
-                  <s-text key={l.variantId}>{`${l.quantity} x ${labelOf(l.variantId)}`}</s-text>
+                  <s-text key={l.variantId}>
+                    {`${l.quantity} x ${labelOf(l.variantId)}`}
+                    {l.overMax ? ` (rounded up to a full box so ${locationName(t.destinationId)} stays at its minimum)` : ""}
+                  </s-text>
                 ))}
                 <div>
                   <s-button

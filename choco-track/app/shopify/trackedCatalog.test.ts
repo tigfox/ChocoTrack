@@ -8,6 +8,7 @@ import {
   loadPendingDrafts,
   loadProducts,
   loadSourceIds,
+  loadTransferSettings,
   type ReportVariant,
 } from './trackedCatalog';
 import { routedClient } from './routedClient';
@@ -144,6 +145,22 @@ describe('loadSourceIds', () => {
   });
 });
 
+describe('loadTransferSettings', () => {
+  it('reads the sources and the pack sizes together', async () => {
+    const client = fakeClient({
+      currentAppInstallation: {
+        metafield: { value: JSON.stringify([W]) },
+        multiples: { value: JSON.stringify({ default: 10, byName: { mini: 50 } }) },
+      },
+    });
+    await expect(loadTransferSettings(client)).resolves.toEqual({ sourceIds: [W], multiples: { fallback: 10, byName: { mini: 50 } } });
+  });
+  it('uses the built-in pack sizes (5, and 100 for minis) when none are saved', async () => {
+    const client = fakeClient({ currentAppInstallation: { metafield: null, multiples: null } });
+    await expect(loadTransferSettings(client)).resolves.toEqual({ sourceIds: [], multiples: { fallback: 5, byName: { mini: 100 } } });
+  });
+});
+
 describe('loadInventoryReport', () => {
   const levelsNode = { id: 'v1', inventoryItem: { inventoryLevels: { nodes: [{ location: { id: W }, quantities: [{ name: 'available', quantity: 9 }, { name: 'incoming', quantity: 1 }] }] } } };
   const routes = (over: Record<string, unknown> = {}) => ({
@@ -160,6 +177,7 @@ describe('loadInventoryReport', () => {
     const report = await loadInventoryReport(routedClient(routes()));
     expect(report.locations).toEqual([{ id: W, name: 'Warehouse' }]);
     expect(report.sourceIds).toEqual([W]);
+    expect(report.multiples).toEqual({ fallback: 5, byName: { mini: 100 } });
     expect(report.products.map((p) => p.title)).toEqual(['Rum']);
     expect(report.levels).toEqual({ v1: { [W]: { available: 9, incoming: 1 } } });
     expect(report.pending).toEqual({});

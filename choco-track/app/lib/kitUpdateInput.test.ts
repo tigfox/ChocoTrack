@@ -20,10 +20,18 @@ describe('parseKitUpdate', () => {
     ['missing kit id', { ...base, kitId: undefined }, 'Invalid request.'],
     ['blank title', { ...base, title: ' ' }, 'Enter a title.'],
     ['long title', { ...base, title: 'x'.repeat(256) }, 'Enter a title.'],
-    ['bad size', { ...base, size: 7 }, 'Choose a kit size.'],
-    ['string size', { ...base, size: '5' }, 'Choose a kit size.'],
+    ['zero size', { ...base, size: 0 }, 'Enter a whole number from 1 to 48.'],
+    ['too big', { ...base, size: 49 }, 'Enter a whole number from 1 to 48.'],
+    ['fraction', { ...base, size: 2.5 }, 'Enter a whole number from 1 to 48.'],
+    ['string size', { ...base, size: '5' }, 'Enter a whole number from 1 to 48.'],
     ['bad category', { ...base, categoryId: 'dark' }, 'Choose a valid category.'],
   ])('rejects %s', (_n, raw, error) => {
     expect(parseKitUpdate(raw)).toEqual({ ok: false, error });
+  });
+});
+
+describe('parseKitUpdate with any size', () => {
+  it('accepts sizes outside the old 4, 5, 6 and 12', () => {
+    expect(parseKitUpdate({ ...base, size: 8 })).toMatchObject({ ok: true, value: { size: 8 } });
   });
 });

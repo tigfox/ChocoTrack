@@ -2,6 +2,7 @@ import { fakeClient } from './fakeClient';
 import {
   buildProductQuery,
   createDraftTransfer,
+  saveMultiples,
   saveSourceIds,
   saveVariantTargets,
   searchProductsForFlag,
@@ -103,6 +104,24 @@ describe('saveSourceIds', () => {
     await saveSourceIds(client, [W, M]);
     expect(client.calls[1]?.variables).toEqual({
       metafields: [{ ownerId: 'gid://shopify/AppInstallation/1', namespace: '$app:inventory', key: 'sources', type: 'json', value: JSON.stringify([W, M]) }],
+    });
+  });
+});
+
+describe('saveMultiples', () => {
+  it('stores the pack sizes, sorted, on the app installation', async () => {
+    const client = fakeClient({ currentAppInstallation: { id: 'gid://shopify/AppInstallation/1' } }, setOk());
+    await saveMultiples(client, { fallback: 5, byName: { mini: 100, full: 10 } });
+    expect(client.calls[1]?.variables).toEqual({
+      metafields: [
+        {
+          ownerId: 'gid://shopify/AppInstallation/1',
+          namespace: '$app:inventory',
+          key: 'multiples',
+          type: 'json',
+          value: '{"default":5,"byName":{"full":10,"mini":100}}',
+        },
+      ],
     });
   });
 });

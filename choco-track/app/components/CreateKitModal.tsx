@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { kitSizeError } from "../domain/kitSize";
 import type { Collection, KitSize, Variant } from "../domain/types";
 import { fieldValue } from "../wc";
 import { CategorySelect } from "./CategorySelect";
@@ -13,16 +14,12 @@ interface Props {
   readonly onCreate: (kit: { title: string; size: KitSize; sku: string; barcode: string; price: string; categoryId: string }) => void;
 }
 
-type SizeOption = "4" | "5" | "6" | "12";
-
 const PRICE = /^\d{1,6}(\.\d{1,2})?$/;
-
-const toSize = (v: string): SizeOption => (v === "4" || v === "5" || v === "12" ? v : "6");
 
 export function CreateKitModal({ open, existing, collections, busy, error: serverError, onClose, onCreate }: Props) {
   const ref = useRef<HTMLElementTagNameMap["s-modal"]>(null);
   const [title, setTitle] = useState("");
-  const [size, setSize] = useState<SizeOption>("6");
+  const [size, setSize] = useState("6");
   const [sku, setSku] = useState("");
   const [barcode, setBarcode] = useState("");
   const [price, setPrice] = useState("");
@@ -43,6 +40,7 @@ export function CreateKitModal({ open, existing, collections, busy, error: serve
   }, [onClose]);
 
   const trimmedSku = sku.trim();
+  const sizeProblem = kitSizeError(Number(size));
   const error = !title.trim()
     ? "Enter a title."
     : !trimmedSku
@@ -54,7 +52,7 @@ export function CreateKitModal({ open, existing, collections, busy, error: serve
           : undefined;
 
   const create = () => {
-    if (error) return;
+    if (error || sizeProblem) return;
     onCreate({ title: title.trim(), size: Number(size) as KitSize, sku: trimmedSku, barcode: barcode.trim(), price: price.trim(), categoryId });
   };
 
@@ -77,12 +75,7 @@ export function CreateKitModal({ open, existing, collections, busy, error: serve
         </s-paragraph>
         {serverError && <s-banner tone="critical">{serverError}</s-banner>}
         <s-text-field label="Title" value={title} onInput={(e) => setTitle(fieldValue(e))} />
-        <s-select label="Kit size" value={size} onInput={(e) => setSize(toSize(fieldValue(e)))}>
-          <s-option value="4">4 mini bars</s-option>
-          <s-option value="5">5 mini bars</s-option>
-          <s-option value="6">6 mini bars</s-option>
-          <s-option value="12">12 mini bars</s-option>
-        </s-select>
+        <s-number-field label="Kit size (mini bars)" min={1} max={48} value={size} error={sizeProblem} onInput={(e) => setSize(fieldValue(e))} />
         <s-text-field label="SKU" value={sku} error={sku && error?.includes("SKU") ? error : undefined} onInput={(e) => setSku(fieldValue(e))} />
         <s-text-field
           label="Price (optional)"
@@ -94,7 +87,7 @@ export function CreateKitModal({ open, existing, collections, busy, error: serve
         <CategorySelect collections={collections} value={categoryId} onChange={setCategoryId} />
         <s-text-field label="Barcode (optional)" value={barcode} onInput={(e) => setBarcode(fieldValue(e))} />
       </s-stack>
-      <s-button slot="primary-action" variant="primary" disabled={Boolean(error) || busy} onClick={create}>Create kit</s-button>
+      <s-button slot="primary-action" variant="primary" disabled={Boolean(error) || Boolean(sizeProblem) || busy} onClick={create}>Create kit</s-button>
       <s-button slot="secondary-actions" onClick={onClose}>Cancel</s-button>
     </s-modal>
   );

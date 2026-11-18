@@ -3,7 +3,7 @@
 A Shopify embedded admin app with two parts. Shopify holds all records; the app stores only OAuth sessions.
 
 - **Inventory** (the main purpose): watch selected products against a minimum and maximum per location, flag what is low, and suggest transfers between locations as draft transfers in Shopify. Plan and status: [`inventory_tracker.md`](inventory_tracker.md).
-- **Sampler Builder**: assembles and disassembles physical sampler kits (4, 5, 6 and 12 packs) from mini chocolate bar inventory, using one atomic `inventoryAdjustQuantities` call per run. Plan and status: [`sampler_builder.md`](sampler_builder.md).
+- **Sampler Builder**: assembles and disassembles physical sampler kits (any size from 1 to 48 bars) from mini chocolate bar inventory, using one atomic `inventoryAdjustQuantities` call per run. Plan and status: [`sampler_builder.md`](sampler_builder.md).
 
 | Folder | What |
 |---|---|

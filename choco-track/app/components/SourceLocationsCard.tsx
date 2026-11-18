@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Location } from "../domain/types";
 import { moveItem } from "../lib/listOps";
 import { postInventory } from "../lib/postInventory";
+import { CollapsibleSection } from "./CollapsibleSection";
 
 interface Props {
   readonly locations: readonly Location[];
@@ -28,7 +29,7 @@ export function SourceLocationsCard({ locations, sourceIds }: Props) {
   };
 
   return (
-    <s-section heading="Transfer sources">
+    <CollapsibleSection heading="Transfer sources">
       <s-stack gap="base">
         <s-paragraph color="subdued">
           Suggested transfers take stock from these locations, in this order, and never below their own minimum. Every other location is a destination.
@@ -57,6 +58,6 @@ export function SourceLocationsCard({ locations, sourceIds }: Props) {
           <s-button variant="primary" disabled={!changed || busy} loading={busy} onClick={() => void save()}>Save sources</s-button>
         </div>
       </s-stack>
-    </s-section>
+    </CollapsibleSection>
   );
 }

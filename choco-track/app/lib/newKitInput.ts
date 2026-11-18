@@ -1,10 +1,9 @@
-import type { KitSize } from '../domain/types';
+import { kitSizeError } from '../domain/kitSize';
 import type { NewKit } from '../shopify/kits';
 import { CATEGORY_ERROR, parseCategory } from './shopifyIds';
 
 export type ParseKitResult = { readonly ok: true; readonly value: NewKit } | { readonly ok: false; readonly error: string };
 
-const SIZES: readonly number[] = [4, 5, 6, 12];
 const MAX_TITLE = 255;
 const MAX_SKU = 64;
 const MAX_BARCODE = 64;
@@ -21,7 +20,8 @@ export const parseNewKit = (raw: unknown): ParseKitResult => {
   if (!cleanTitle) return { ok: false, error: 'Enter a title.' };
   const cleanSku = text(sku, MAX_SKU);
   if (!cleanSku) return { ok: false, error: 'Enter a SKU.' };
-  if (typeof size !== 'number' || !SIZES.includes(size)) return { ok: false, error: 'Choose a kit size.' };
+  const sizeProblem = kitSizeError(size);
+  if (sizeProblem) return { ok: false, error: sizeProblem };
   if (barcode !== undefined && barcode !== '' && !text(barcode, MAX_BARCODE)) return { ok: false, error: 'That barcode is not valid.' };
   const cleanBarcode = text(barcode, MAX_BARCODE);
   const cleanPrice = typeof price === "string" ? price.trim() : price;
@@ -34,7 +34,7 @@ export const parseNewKit = (raw: unknown): ParseKitResult => {
     ok: true,
     value: {
       title: cleanTitle,
-      size: size as KitSize,
+      size: size as number,
       sku: cleanSku,
       ...(cleanBarcode ? { barcode: cleanBarcode } : {}),
       ...(cleanPrice ? { price: cleanPrice as string } : {}),

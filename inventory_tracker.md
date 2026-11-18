@@ -2,7 +2,7 @@
 
 A second section of ChocoTrack, and its main purpose: watch selected inventory against per-location targets, flag what is low, and suggest transfers between locations. The Sampler Builder (`sampler_builder.md`) stays as it is.
 
-**Status (2026-11-13): all development for the Inventory section is done and waiting for human testing in the dev store.** Phases I0 to I6 are complete. Nothing has been clicked through in a browser by a person yet; see the test checklist below. Production deploy is still blocked on the Droplet (see `sampler_builder.md`, Phase 7).
+**Status (2026-11-17): all development is done and waiting for human testing in the dev store.** Phases I0 to I6 (2026-11-13) plus the follow-up changes of 2026-11-17 are complete: draft-transfer links, pack sizes ("Send in multiples of"), a folded-up Settings page titled "ChocoTrack Settings", and typed kit sizes (1 to 48). 536 unit and render tests pass; nothing has been clicked through in a browser by a person yet. See the test checklist below. Production deploy is still blocked on the Droplet (see `sampler_builder.md`, Phase 7).
 
 ## Decisions (from the store team)
 
@@ -107,10 +107,11 @@ How a suggestion is worked out, per tracked variant per destination location:
 3. Enter a minimum and maximum for two locations (for example min 30, max 100) and click **Save** on the row. Reload: the targets stay. Try min 50, max 10: you should get a message and nothing is saved.
 4. Make a stock level fall below its minimum (adjust inventory in Shopify), click **Refresh**: the cell shows **Low**, a red banner appears at the top, and the sidebar link shows a count within about a minute.
 5. On **Settings**, add a source location (for example Warehouse) under **Transfer sources** and **Save sources**.
-6. Back on Inventory click **Suggest transfers**. You should see a route like Warehouse to Market Store with quantities that take the destination up to its maximum without taking the warehouse below its own minimum. Click **Create draft in Shopify**, then open Transfers in Shopify: a draft tagged `choco-track` should exist. Back in the app the cell now shows "+N in draft" and the suggestion is gone.
+6. Back on Inventory click **Suggest transfers**. You should see a route like Warehouse to Market Store with quantities that take the destination up to its maximum without taking the warehouse below its own minimum. Click **Create draft in Shopify**, then open Transfers in Shopify: a draft tagged `choco-track` should exist. Back in the app the cell now shows "+N in draft" and the suggestion is gone. Quantities are whole multiples (Mini in 100s, other variants in 5s; a line rounded up past the maximum says so), and the modal shows an **Open draft** link per draft that opens it in Shopify (check that the link lands on the draft).
 7. Open the same variant in two browser tabs, save different targets in each: the second save should be refused with the "Someone else changed these targets" message.
 8. Hide a location with its checkbox: the column disappears and the targets for it are still there when you show it again.
-9. Check the sampler screens still work (Assemble, Disassemble, Settings kits).
+9. Check the sampler screens still work (Assemble, Disassemble).
+10. **Settings** (titled "ChocoTrack Settings"): Sampler Kits, Transfer sources and Send in multiples of each open and close with their triangle and start closed. **Create a new kit** is inside Sampler Kits; create a kit with a size such as 8 (typed), then edit a kit's size. Sizes 0 and 49 show a message. Change the Mini pack size, save, reload (it stays) and see the suggestions change. Edit a field, fold the card, reopen it: the edit is still there.
 
 Please report anything that looks wrong; the likeliest trouble spots are the table layout in the Shopify admin (column widths and the sticky left column) and the exact wording of messages.
 
@@ -142,6 +143,39 @@ The spike created and deleted its test definitions and metafields; the dev store
 - **Deleted or renamed locations.** Targets for a location that no longer exists are ignored; they are never deleted automatically.
 - **Alerts need someone to look.** With in-app alerts only, nobody is told while the app is closed. Email or Slack would need a scheduled job on the Droplet; that is a later step if wanted.
 - **To confirm with the store team:** should Inventory be the app's home page (first in the sidebar and the landing page)? I assume yes, since it is the main purpose.
+
+## Update: transfer links and pack sizes (built 2026-11-17, waiting for human testing)
+
+Two changes to suggested transfers, both built test-first. 516 unit and server-render tests pass, typecheck, lint and build are clean, coverage 99%. Nothing has been clicked through in a browser.
+
+### Change 1: link to the store's transfer page after a draft is created
+
+- After **Create draft in Shopify** (or **Create all**), the Suggested transfers modal shows a **Draft transfers created** section: one **Open draft: Warehouse to Market Store** link per draft (new tab), plus **All transfers in Shopify**. The links stay after the suggestion drops off the list.
+- The link is `https://admin.shopify.com/store/<store>/transfers/<id>`, built on the server side of the page from the session's shop domain (`app/lib/transferLinks.ts`). A bad id shows plain text with no link; an unknown store shows no links at all.
+- **To verify by hand:** that this URL shape opens the draft in the admin. If it does not, the fix is one line in `transferLinks.ts` (the list link is the fallback).
+
+### Change 2: ship in pack sizes ("Send in multiples of")
+
+**Rule (confirmed 2026-11-17):** a transfer quantity is a whole multiple of the variant's pack size, the highest that does not go over the maximum. **No location is left below its minimum:** if rounding down would leave the destination below its minimum, the quantity rounds **up** to the smallest multiple that reaches it, even past the maximum, and the line says "rounded up to a full box so <location> stays at its minimum". Each source gives whole multiples only (its spare stock above its own minimum is rounded down). If the sources cannot supply enough whole multiples to reach the minimum, the destination shows as a still-low shortfall; the app never ships a partial pack.
+
+**Setting:** Settings page, **Send in multiples of** card. A **default** (built in: 5) and **overrides by variant name** (built in: Mini = 100, matched ignoring case and spacing). Whole numbers 1 to 1,000. Stored with the app installation (`$app:inventory` / `multiples`), no database; until someone saves, the built-in 5 and Mini = 100 apply. Variants named "Default Title" (single-variant products) use the default.
+
+**Where it applies:** `app/domain/multiples.ts` (parse, validate, look up), `app/domain/suggest.ts` (the rounding), `planTransfers` (shared by the screen preview and the server, which recomputes on fresh data before creating anything, so the draft always matches the preview).
+
+### Test additions
+
+Human test checklist step 6 changes: quantities are whole multiples (Mini in 100s, others in 5s), a line that was rounded up says so, and after creating a draft the **Open draft** link opens it in Shopify. New steps: on **Settings**, change the default or the Mini override, save, reload (values stay) and see the suggestions change; try 0 or 2.5 (a message, nothing saved).
+
+### Settings page layout
+
+Every section on Settings is folded behind a disclosure triangle and starts closed: **Sampler Kits** (all kits together, one triangle), **Transfer sources** and **Send in multiples of**. Kit size is now a typed number (1 to 48) on each kit and in Create kit (`CollapsibleSection`, built on the browser's details/summary because Polaris has no accordion). Contents stay loaded while folded, so unsaved edits survive. Checklist: open and close each card; edit a field, fold the card, reopen it and the edit is still there.
+
+### Risks
+
+- The admin URL shape for a transfer (verify once).
+- A variant whose name is not "Mini" but is sold in boxes of 100 needs its own override (the card adds them by name).
+- Rounding up can put a destination above its maximum; this is deliberate and flagged on the line.
+- Overrides match the variant name only, so renaming a variant in Shopify silently moves it back to the default.
 
 ## Later
 

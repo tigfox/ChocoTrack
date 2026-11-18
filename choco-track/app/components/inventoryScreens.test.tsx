@@ -3,6 +3,9 @@ import { suggestTransfers } from "../domain/suggest";
 import { buildReportGroups } from "../lib/reportRows";
 import type { ReportProduct, ReportVariant } from "../shopify/trackedCatalog";
 import { InventoryTable } from "./InventoryTable";
+import { CreatedTransferLinks } from "./CreatedTransferLinks";
+import { KitSettingsView } from "./KitSettingsView";
+import { MultiplesCard } from "./MultiplesCard";
 import { SourceLocationsCard } from "./SourceLocationsCard";
 import { SuggestedTransfersModal } from "./SuggestedTransfersModal";
 
@@ -111,6 +114,16 @@ describe("SuggestedTransfersModal", () => {
     expect(noSources).toContain("No source locations set");
     expect(noSources).not.toContain("at or above its minimum");
   });
+  it("says when a line was rounded up past the maximum to keep the minimum", () => {
+    const rounded = { transfers: [{ originId: W, destinationId: M, lines: [{ variantId: "mini", quantity: 100, overMax: true as const }] }], shortfalls: [] };
+    const html = render({ plan: rounded });
+    expect(html).toContain("100 x Rum Caramel - Mini");
+    expect(html).toContain("rounded up to a full box so Market Store stays at its minimum");
+    expect(render()).not.toContain("rounded up");
+  });
+  it("tells people quantities follow the pack sizes from Settings", () => {
+    expect(render()).toContain("Quantities follow the pack sizes on the Settings page");
+  });
   it("names shortfalls", () => {
     const html = render({ plan: { transfers: [], shortfalls: [{ variantId: "mini", destinationId: M, quantity: 12, stillLow: true }] } });
     expect(html).toContain("Rum Caramel - Mini at Market Store: 12 short of the maximum, still below the minimum");
@@ -131,5 +144,83 @@ describe("SourceLocationsCard", () => {
   });
   it("says so when there are none", () => {
     expect(renderToStaticMarkup(<SourceLocationsCard locations={locations} sourceIds={[]} />)).toContain("No source locations yet.");
+  });
+});
+
+describe("CreatedTransferLinks", () => {
+  const created = [
+    { id: "gid://shopify/InventoryTransfer/11", originId: W, destinationId: M, lines: [{ variantId: "mini", quantity: 100 }] },
+    { id: "not-a-transfer-id", originId: M, destinationId: W, lines: [{ variantId: "mini", quantity: 5 }] },
+  ];
+  it("links each created draft to its page in the Shopify admin, opening in a new tab", () => {
+    const html = renderToStaticMarkup(<CreatedTransferLinks created={created} locations={locations} shopHandle="choco-dev" />);
+    expect(html).toContain('href="https://admin.shopify.com/store/choco-dev/transfers/11"');
+    expect(html).toContain('target="_blank"');
+    expect(html).toContain("Open draft: Warehouse to Market Store");
+  });
+  it("shows a bad id as plain text with no link, and links to the Transfers list", () => {
+    const html = renderToStaticMarkup(<CreatedTransferLinks created={created} locations={locations} shopHandle="choco-dev" />);
+    expect(html).toContain("Market Store to Warehouse");
+    expect(html.match(/transfers\/11/g)).toHaveLength(1);
+    expect(html).toContain('href="https://admin.shopify.com/store/choco-dev/transfers"');
+  });
+  it("shows no links at all when the store is unknown, and nothing when none were created", () => {
+    expect(renderToStaticMarkup(<CreatedTransferLinks created={created} locations={locations} shopHandle={undefined} />)).not.toContain("href=");
+    expect(renderToStaticMarkup(<CreatedTransferLinks created={[]} locations={locations} shopHandle="choco-dev" />)).toBe("");
+  });
+});
+
+describe("MultiplesCard", () => {
+  const html = renderToStaticMarkup(<MultiplesCard multiples={{ fallback: 5, byName: { mini: 100 } }} />);
+  it("shows the default and the overrides by variant name", () => {
+    expect(html).toContain(">Send in multiples of</summary>");
+    expect(html).toContain('label="Default"');
+    expect(html).toContain('value="5"');
+    expect(html).toContain("mini");
+    expect(html).toContain('value="100"');
+    expect(html).toContain("Save pack sizes");
+  });
+  it("starts folded away", () => {
+    expect(html).toContain("<details");
+    expect(html).not.toContain(" open");
+    expect(renderToStaticMarkup(<SourceLocationsCard locations={locations} sourceIds={[]} />)).toMatch(/<details(?![^>]* open)/);
+  });
+  it("lets a variant name be added", () => {
+    expect(html).toContain("Add an override");
+  });
+});
+
+vi.mock("../hooks/useSettingsAction", () => ({ useSettingsAction: () => ({ busy: false, response: undefined, submit: () => Promise.resolve() }) }));
+
+describe("KitSettingsView", () => {
+  const kit = (id: string, title: string, kitSize: number) => ({ id, title, sku: `S${kitSize}`, kitSize, inventoryItemId: `i${id}`, productId: "p", price: "1.00" }) as never;
+  const workspace = { locations, collections: [], kits: [kit("a", "Sampler 6", 6), kit("b", "Sampler 8", 8)], stock: {} };
+  const html = renderToStaticMarkup(<KitSettingsView workspace={workspace} sourceIds={[]} multiples={{ fallback: 5, byName: {} }} />);
+  it("folds every kit behind one closed Sampler Kits section", () => {
+    expect(html).toContain(">Sampler Kits</summary>");
+    expect(html.match(/>Sampler Kits<\/summary>/g)).toHaveLength(1);
+    expect(html).toContain('heading="Sampler 6"');
+    expect(html).toContain('heading="Sampler 8"');
+    expect(html.indexOf("Sampler Kits</summary>")).toBeLessThan(html.indexOf('heading="Sampler 6"'));
+    expect(html.indexOf('heading="Sampler 8"')).toBeLessThan(html.indexOf("Transfer sources"));
+  });
+  it("titles the page ChocoTrack Settings and keeps Create a new kit inside the Sampler Kits section, not in the page header", () => {
+    expect(html).toContain('heading="ChocoTrack Settings"');
+    expect(html).not.toContain("Kit settings");
+    expect(html.slice(0, html.indexOf(">Sampler Kits</summary>"))).not.toContain("Create a new kit");
+    const button = html.indexOf(">Create a new kit</s-button>");
+    expect(button).toBeGreaterThan(html.indexOf(">Sampler Kits</summary>"));
+    expect(button).toBeLessThan(html.indexOf("Transfer sources"));
+  });
+  it("opens the section with a warning when there are no kits, so the button is in reach", () => {
+    const empty = renderToStaticMarkup(<KitSettingsView workspace={{ ...workspace, kits: [] }} sourceIds={[]} multiples={{ fallback: 5, byName: {} }} />);
+    expect(empty).toMatch(/<details[^>]* open/);
+    expect(empty).toContain("No kits yet");
+    expect(empty).toContain(">Create a new kit</s-button>");
+  });
+  it("lets the kit size be typed as a number instead of picked from a list", () => {
+    expect(html).toContain('label="Kit size"');
+    expect(html).toContain('value="8"');
+    expect(html).not.toContain("mini bars</s-option>");
   });
 });

@@ -5,8 +5,11 @@ export interface BoxLayout {
   readonly cols: number;
 }
 
-/** Physical box layouts: 4-pack 1x4, 5-pack 1x5, 6-pack 1x6, 12-pack 2x6. */
-export const boxLayout = (size: KitSize): BoxLayout => (size === 12 ? { rows: 2, cols: 6 } : { rows: 1, cols: size });
+const MAX_COLS = 6;
+
+/** Boxes up to 6 bars are one row; larger boxes fill rows of 6 (a 12-pack is 2x6). */
+export const boxLayout = (size: KitSize): BoxLayout =>
+  size <= MAX_COLS ? { rows: 1, cols: size } : { rows: Math.ceil(size / MAX_COLS), cols: MAX_COLS };
 
 export interface BoxSlot {
   readonly variantId: string;

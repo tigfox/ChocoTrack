@@ -1,4 +1,5 @@
-export type KitSize = 4 | 5 | 6 | 12;
+/** Bars in a kit: any whole number the Settings page allows (see kitSize.ts). */
+export type KitSize = number;
 
 export interface Location {
   readonly id: string;

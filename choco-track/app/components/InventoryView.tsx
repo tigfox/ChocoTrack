@@ -22,9 +22,11 @@ interface Props {
   readonly report: InventoryReport | undefined;
   readonly collections: readonly Collection[];
   readonly error: string | undefined;
+  /** The store name, for links to Shopify admin pages. */
+  readonly shopHandle?: string;
 }
 
-export function InventoryView({ report, collections, error }: Props) {
+export function InventoryView({ report, collections, error, shopHandle }: Props) {
   const { revalidate, state } = useRevalidator();
   if (!report) {
     return (
@@ -36,17 +38,18 @@ export function InventoryView({ report, collections, error }: Props) {
       </s-page>
     );
   }
-  return <LoadedInventory report={report} collections={collections} refreshing={state !== "idle"} onRefresh={() => void revalidate()} />;
+  return <LoadedInventory report={report} collections={collections} shopHandle={shopHandle} refreshing={state !== "idle"} onRefresh={() => void revalidate()} />;
 }
 
 interface LoadedProps {
   readonly report: InventoryReport;
   readonly collections: readonly Collection[];
+  readonly shopHandle?: string;
   readonly refreshing: boolean;
   readonly onRefresh: () => void;
 }
 
-function LoadedInventory({ report, collections, refreshing, onRefresh }: LoadedProps) {
+function LoadedInventory({ report, collections, shopHandle, refreshing, onRefresh }: LoadedProps) {
   const [products, setProducts] = useState(report.products);
   const [levels, setLevels] = useState(report.levels);
   const [pending, setPending] = useState(report.pending);
@@ -85,8 +88,8 @@ function LoadedInventory({ report, collections, refreshing, onRefresh }: LoadedP
   const summary = lowSummary(variants.filter(hasTargets), levels, pending);
   const needTargets = productsWithoutTargets(products);
   const plan = useMemo(
-    () => planTransfers({ products, levels, pending, sourceIds: report.sourceIds, locations: report.locations }),
-    [products, levels, pending, report.sourceIds, report.locations],
+    () => planTransfers({ products, levels, pending, sourceIds: report.sourceIds, locations: report.locations, multiples: report.multiples }),
+    [products, levels, pending, report.sourceIds, report.locations, report.multiples],
   );
   const truncated = products.filter((p) => p.truncated);
   const trackedIds = useMemo(() => new Set(products.map((p) => p.id)), [products]);
@@ -238,6 +241,7 @@ function LoadedInventory({ report, collections, refreshing, onRefresh }: LoadedP
         locations={report.locations}
         variants={variants}
         hasSources={report.sourceIds.length > 0}
+        shopHandle={shopHandle}
         onClose={() => setTransfersOpen(false)}
         onCreate={createTransfers}
         onCreated={created}

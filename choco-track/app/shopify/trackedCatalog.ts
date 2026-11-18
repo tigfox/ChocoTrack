@@ -1,4 +1,5 @@
 import type { Location } from '../domain/types';
+import { DEFAULT_MULTIPLES, parseMultiples, type Multiples } from '../domain/multiples';
 import { parseTargets } from '../domain/targets';
 import type { LevelMap, PendingMap, TrackedVariant } from '../domain/tracking';
 import { logError } from '../lib/logError';
@@ -13,6 +14,8 @@ export const TRACKED_METAFIELD = { namespace: 'choco_track', key: 'tracked' } as
 export const TARGETS_METAFIELD = { namespace: 'choco_track', key: 'targets' } as const;
 /** App-owned metadata on the app installation: ordered ids of the locations that supply transfers. */
 export const SOURCES_METAFIELD = { namespace: '$app:inventory', key: 'sources' } as const;
+/** App-owned metadata on the app installation: pack sizes (the "send in multiples of" setting). */
+export const MULTIPLES_METAFIELD = { namespace: '$app:inventory', key: 'multiples' } as const;
 /** Tag on every draft transfer the app creates, so its drafts can be found again. */
 export const TRANSFER_TAG = 'choco-track';
 
@@ -40,6 +43,7 @@ export interface ReportProduct {
 export interface InventoryReport {
   readonly locations: readonly Location[];
   readonly sourceIds: readonly string[];
+  readonly multiples: Multiples;
   readonly products: readonly ReportProduct[];
   readonly levels: LevelMap;
   readonly pending: PendingMap;
@@ -261,29 +265,43 @@ const SOURCES_QUERY = `#graphql
   query SourceLocations {
     currentAppInstallation {
       metafield(namespace: "${SOURCES_METAFIELD.namespace}", key: "${SOURCES_METAFIELD.key}") { value }
+      multiples: metafield(namespace: "${MULTIPLES_METAFIELD.namespace}", key: "${MULTIPLES_METAFIELD.key}") { value }
     }
   }
 `;
 
-/** Ordered ids of the locations that supply transfers (saved with the app, not in a database). */
-export const loadSourceIds = async (client: GraphqlClient): Promise<readonly string[]> => {
-  const data = await client<{ currentAppInstallation: { metafield: { value: string } | null } }>(SOURCES_QUERY);
+const parseSourceIds = (raw: string | undefined): readonly string[] => {
   try {
-    const parsed: unknown = JSON.parse(data.currentAppInstallation.metafield?.value ?? '[]');
+    const parsed: unknown = JSON.parse(raw ?? '[]');
     return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : [];
   } catch {
     return [];
   }
 };
 
+export interface TransferSettings {
+  readonly sourceIds: readonly string[];
+  readonly multiples: Multiples;
+}
+
+/** Transfer settings saved with the app, not in a database: ordered source locations and pack sizes. */
+export const loadTransferSettings = async (client: GraphqlClient): Promise<TransferSettings> => {
+  const data = await client<{ currentAppInstallation: { metafield: { value: string } | null; multiples?: { value: string } | null } }>(SOURCES_QUERY);
+  const { metafield, multiples } = data.currentAppInstallation;
+  return { sourceIds: parseSourceIds(metafield?.value), multiples: multiples ? parseMultiples(multiples.value) : DEFAULT_MULTIPLES };
+};
+
+/** Ordered ids of the locations that supply transfers. */
+export const loadSourceIds = async (client: GraphqlClient): Promise<readonly string[]> => (await loadTransferSettings(client)).sourceIds;
+
 const draftsUnavailable = (err: unknown): string =>
   `Draft transfers couldn't be read, so transfer suggestions are hidden. ${err instanceof TooManyDraftsError ? err.message : friendlyMessage(err)}`;
 
 /** Everything the Inventory screen needs, read with as much parallelism as the dependencies allow. */
 export const loadInventoryReport = async (client: GraphqlClient): Promise<InventoryReport> => {
-  const [locations, sourceIds, products] = await Promise.all([
+  const [locations, { sourceIds, multiples }, products] = await Promise.all([
     listLocations(client),
-    loadSourceIds(client),
+    loadTransferSettings(client),
     findFlaggedProductIds(client).then((ids) => loadProducts(client, ids)),
   ]);
   const variants = products.flatMap((p) => p.variants);
@@ -297,5 +315,5 @@ export const loadInventoryReport = async (client: GraphqlClient): Promise<Invent
       },
     ),
   ]);
-  return { locations, sourceIds, products, levels, pending: drafts.pending, ...(drafts.error ? { draftsError: drafts.error } : {}) };
+  return { locations, sourceIds, multiples, products, levels, pending: drafts.pending, ...(drafts.error ? { draftsError: drafts.error } : {}) };
 };

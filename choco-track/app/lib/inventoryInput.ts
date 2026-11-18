@@ -1,3 +1,4 @@
+import { nameKey, validateMultiple, type Multiples } from '../domain/multiples';
 import { setTarget, validateTarget, type Targets } from '../domain/targets';
 import { isLocationGid, isProductGid, isVariantGid } from './shopifyIds';
 
@@ -6,6 +7,8 @@ export type Parsed<T> = { readonly ok: true; readonly value: T } | { readonly ok
 const INVALID = 'Invalid request.';
 const MAX_LOCATIONS = 50;
 const MAX_SOURCES = 20;
+const MAX_OVERRIDES = 50;
+const MAX_NAME = 60;
 const MAX_DIGEST = 200;
 const MIN_KEY = 8;
 const MAX_KEY = 64;
@@ -58,6 +61,26 @@ export const parseSourcesInput = (raw: unknown): Parsed<{ sourceIds: readonly st
   const ids = record(raw)?.sourceIds;
   if (!Array.isArray(ids) || ids.length > MAX_SOURCES || !ids.every(isLocationGid) || new Set(ids).size !== ids.length) return fail();
   return { ok: true, value: { sourceIds: ids } };
+};
+
+/** Default pack size plus overrides by variant name. Names are normalised, so " Mini" and "mini" are the same entry. */
+export const parseMultiplesInput = (raw: unknown): Parsed<{ multiples: Multiples }> => {
+  const body = record(raw);
+  const list = body?.overrides;
+  if (!body || typeof body.fallback !== 'number' || !Array.isArray(list) || list.length > MAX_OVERRIDES) return fail();
+  const problem = validateMultiple(body.fallback);
+  if (problem) return fail(problem);
+  let byName: Record<string, number> = {};
+  for (const item of list) {
+    const entry = record(item);
+    if (!entry || typeof entry.name !== 'string' || typeof entry.multiple !== 'number') return fail();
+    const key = nameKey(entry.name);
+    if (key === '' || key.length > MAX_NAME || key in byName) return fail();
+    const bad = validateMultiple(entry.multiple);
+    if (bad) return fail(bad);
+    byName = { ...byName, [key]: entry.multiple };
+  }
+  return { ok: true, value: { multiples: { fallback: body.fallback, byName } } };
 };
 
 export interface TransferInput {

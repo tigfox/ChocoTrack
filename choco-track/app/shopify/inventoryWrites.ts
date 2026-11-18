@@ -2,7 +2,8 @@ import { serializeTargets, type Targets } from '../domain/targets';
 import { numericId, sanitize } from './catalog';
 import type { GraphqlClient } from './client';
 import { assertNoUserErrors, ShopifyApiError, type UserError } from './errors';
-import { SOURCES_METAFIELD, TARGETS_METAFIELD, TRACKED_METAFIELD, TRANSFER_TAG } from './trackedCatalog';
+import { serializeMultiples, type Multiples } from '../domain/multiples';
+import { MULTIPLES_METAFIELD, SOURCES_METAFIELD, TARGETS_METAFIELD, TRACKED_METAFIELD, TRANSFER_TAG } from './trackedCatalog';
 
 const SET_METAFIELDS = `#graphql
   mutation SetMetafields($metafields: [MetafieldsSetInput!]!) {
@@ -124,6 +125,19 @@ export const saveSourceIds = async (client: GraphqlClient, ids: readonly string[
     ...SOURCES_METAFIELD,
     type: 'json',
     value: JSON.stringify(ids),
+  });
+};
+
+/** Saves the "send in multiples of" pack sizes with the app installation (no database). */
+export const saveMultiples = async (client: GraphqlClient, multiples: Multiples): Promise<void> => {
+  const { currentAppInstallation } = await client<{ currentAppInstallation: { id: string } }>(
+    '#graphql\n query AppInstallationId { currentAppInstallation { id } }',
+  );
+  await setMetafield(client, 'Save pack sizes', {
+    ownerId: currentAppInstallation.id,
+    ...MULTIPLES_METAFIELD,
+    type: 'json',
+    value: serializeMultiples(multiples),
   });
 };
 

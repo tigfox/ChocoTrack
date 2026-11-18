@@ -1,4 +1,5 @@
-import type { Collection, KitSize, StockMap, Variant } from '../domain/types';
+import { parseKitSize } from '../domain/kitSize';
+import type { Collection, StockMap, Variant } from '../domain/types';
 import type { GraphqlClient } from './client';
 
 /** Namespace/key of the product metafield that marks a product as a sampler kit and holds its size. */
@@ -7,7 +8,6 @@ export const KIT_SIZE_METAFIELD = { namespace: 'choco_track', key: 'kit_size' } 
 /** Optional kit setting: the collection (category) the mix picker starts on. */
 export const CATEGORY_METAFIELD = { namespace: 'choco_track', key: 'category' } as const;
 
-const KIT_SIZES: readonly number[] = [4, 5, 6, 12];
 
 /** A domain Variant plus the id Shopify needs for inventory calls. */
 export interface CatalogVariant extends Variant {
@@ -96,11 +96,6 @@ const toResult = (nodes: readonly VariantNode[]): CatalogResult => ({
 });
 
 const DEFAULT_VARIANT_TITLE = 'Default Title';
-
-const parseKitSize = (raw: string | undefined): KitSize | undefined => {
-  const n = Number(raw);
-  return KIT_SIZES.includes(n) ? (n as KitSize) : undefined;
-};
 
 export const toCatalogVariant = (node: VariantNode): CatalogVariant => {
   const imageUrl = node.image?.url ?? node.product.featuredMedia?.preview?.image?.url;

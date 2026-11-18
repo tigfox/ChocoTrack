@@ -19,8 +19,9 @@ describe('parseNewKit', () => {
     ['blank title', { title: '  ', size: 4, sku: 'S' }, 'Enter a title.'],
     ['long title', { title: 'x'.repeat(256), size: 4, sku: 'S' }, 'Enter a title.'],
     ['missing sku', { title: 'T', size: 4 }, 'Enter a SKU.'],
-    ['bad size', { title: 'T', size: 7, sku: 'S' }, 'Choose a kit size.'],
-    ['string size', { title: 'T', size: '6', sku: 'S' }, 'Choose a kit size.'],
+    ['zero size', { title: 'T', size: 0, sku: 'S' }, 'Enter a whole number from 1 to 48.'],
+    ['too big', { title: 'T', size: 49, sku: 'S' }, 'Enter a whole number from 1 to 48.'],
+    ['string size', { title: 'T', size: '6', sku: 'S' }, 'Enter a whole number from 1 to 48.'],
     ['bad barcode', { title: 'T', size: 4, sku: 'S', barcode: 5 }, 'That barcode is not valid.'],
   ])('rejects %s', (_n, raw, error) => {
     expect(parseNewKit(raw)).toEqual({ ok: false, error });
@@ -53,5 +54,11 @@ describe('parseNewKit category', () => {
   });
   it.each([['text', 'dark'], ['wrong type of id', 'gid://shopify/Product/1'], ['number', 5]])('rejects %s', (_n, categoryId) => {
     expect(parseNewKit({ ...base, categoryId })).toEqual({ ok: false, error: 'Choose a valid category.' });
+  });
+});
+
+describe('parseNewKit with any size', () => {
+  it('accepts sizes outside the old 4, 5, 6 and 12', () => {
+    expect(parseNewKit({ title: 'T', size: 8, sku: 'S' })).toMatchObject({ ok: true, value: { size: 8 } });
   });
 });

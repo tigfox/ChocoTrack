@@ -11,6 +11,11 @@ describe('boxLayout', () => {
     [5, { rows: 1, cols: 5 }],
     [6, { rows: 1, cols: 6 }],
     [12, { rows: 2, cols: 6 }],
+    [1, { rows: 1, cols: 1 }],
+    [7, { rows: 2, cols: 6 }],
+    [8, { rows: 2, cols: 6 }],
+    [13, { rows: 3, cols: 6 }],
+    [48, { rows: 8, cols: 6 }],
   ] as const)('%s bars -> %o', (size, layout) => {
     expect(boxLayout(size)).toEqual(layout);
   });

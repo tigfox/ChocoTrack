@@ -2,9 +2,9 @@ import { hasTargets } from '../domain/tracking';
 import type { LevelMap } from '../domain/tracking';
 import type { GraphqlClient } from '../shopify/client';
 import { friendlyMessage } from '../shopify/errors';
-import { createDraftTransfer, saveSourceIds, saveVariantTargets, setProductFlag } from '../shopify/inventoryWrites';
+import { createDraftTransfer, saveMultiples, saveSourceIds, saveVariantTargets, setProductFlag } from '../shopify/inventoryWrites';
 import { loadInventoryReport, loadLevels, loadProducts, type ReportProduct } from '../shopify/trackedCatalog';
-import { parseFlagInput, parseSourcesInput, parseTargetsInput, parseTransferInput } from './inventoryInput';
+import { parseFlagInput, parseMultiplesInput, parseSourcesInput, parseTargetsInput, parseTransferInput } from './inventoryInput';
 import { logError } from './logError';
 import { planTransfers } from './planTransfers';
 
@@ -57,6 +57,13 @@ const saveSources = async (client: GraphqlClient, raw: unknown): Promise<Invento
   return { ok: true, message: 'Saved source locations.' };
 };
 
+const saveMultiplesIntent = async (client: GraphqlClient, raw: unknown): Promise<InventoryResponse> => {
+  const parsed = parseMultiplesInput(raw);
+  if (!parsed.ok) return fail(parsed.error);
+  await saveMultiples(client, parsed.value.multiples);
+  return { ok: true, message: 'Saved pack sizes.' };
+};
+
 const NOTHING = 'Nothing to transfer right now.';
 
 /** Never trusts quantities from the browser: the suggestions are recomputed here from fresh Shopify data. */
@@ -107,6 +114,8 @@ export const handleInventory = async (client: GraphqlClient, raw: unknown): Prom
         return await saveTargets(client, raw);
       case 'saveSources':
         return await saveSources(client, raw);
+      case 'saveMultiples':
+        return await saveMultiplesIntent(client, raw);
       case 'createTransfers':
         return await createTransfers(client, raw);
       default:

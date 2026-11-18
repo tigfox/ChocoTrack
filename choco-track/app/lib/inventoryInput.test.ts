@@ -1,4 +1,4 @@
-import { parseFlagInput, parseSourcesInput, parseTargetsInput, parseTransferInput } from './inventoryInput';
+import { parseFlagInput, parseMultiplesInput, parseSourcesInput, parseTargetsInput, parseTransferInput } from './inventoryInput';
 
 const P = 'gid://shopify/Product/1';
 const V = 'gid://shopify/ProductVariant/2';
@@ -54,6 +54,28 @@ describe('parseSourcesInput', () => {
     'rejects %s',
     (_n, raw) => expect(parseSourcesInput(raw)).toEqual({ ok: false, error: 'Invalid request.' }),
   );
+});
+
+describe('parseMultiplesInput', () => {
+  const ok = { fallback: 5, overrides: [{ name: ' Mini ', multiple: 100 }] };
+  it('accepts a default and overrides by variant name, normalising the names', () => {
+    expect(parseMultiplesInput(ok)).toEqual({ ok: true, value: { multiples: { fallback: 5, byName: { mini: 100 } } } });
+    expect(parseMultiplesInput({ fallback: 1, overrides: [] })).toEqual({ ok: true, value: { multiples: { fallback: 1, byName: {} } } });
+  });
+  it('gives the same messages as the screen for bad numbers', () => {
+    expect(parseMultiplesInput({ ...ok, fallback: 0 })).toEqual({ ok: false, error: 'Enter a whole number from 1 to 1000.' });
+    expect(parseMultiplesInput({ fallback: 5, overrides: [{ name: 'mini', multiple: 2.5 }] })).toEqual({ ok: false, error: 'Enter a whole number from 1 to 1000.' });
+  });
+  it.each([
+    ['not an object', 'x'],
+    ['no default', { overrides: [] }],
+    ['no list', { fallback: 5 }],
+    ['a name that is not text', { fallback: 5, overrides: [{ name: 1, multiple: 5 }] }],
+    ['an empty name', { fallback: 5, overrides: [{ name: '  ', multiple: 5 }] }],
+    ['a long name', { fallback: 5, overrides: [{ name: 'x'.repeat(61), multiple: 5 }] }],
+    ['the same name twice', { fallback: 5, overrides: [{ name: 'Mini', multiple: 5 }, { name: ' mini', multiple: 10 }] }],
+    ['too many overrides', { fallback: 5, overrides: Array.from({ length: 51 }, (_, i) => ({ name: `n${i}`, multiple: 5 })) }],
+  ])('rejects %s', (_n, raw) => expect(parseMultiplesInput(raw)).toMatchObject({ ok: false }));
 });
 
 describe('parseTransferInput', () => {

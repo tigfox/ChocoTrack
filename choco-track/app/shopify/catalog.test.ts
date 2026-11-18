@@ -49,7 +49,8 @@ describe('toCatalogVariant', () => {
   });
   it('reads the kit size only when valid', () => {
     expect(toCatalogVariant(node({}, { kitSize: { value: '5' } })).kitSize).toBe(5);
-    expect(toCatalogVariant(node({}, { kitSize: { value: '7' } })).kitSize).toBeUndefined();
+    expect(toCatalogVariant(node({}, { kitSize: { value: '7' } })).kitSize).toBe(7);
+    expect(toCatalogVariant(node({}, { kitSize: { value: '49' } })).kitSize).toBeUndefined();
     expect(toCatalogVariant(node({}, { kitSize: { value: 'x' } })).kitSize).toBeUndefined();
   });
 });
