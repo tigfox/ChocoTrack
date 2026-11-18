@@ -1,0 +1,33 @@
+# Production configuration for the Droplet. Deploy with: shopify app deploy --config chocotrack-production
+# The dev app (shopify.app.toml) rewrites its URLs on every `shopify app dev`, so production has its own app.
+# Scopes and webhooks must stay identical to shopify.app.toml. The client_id is public; the secret is not in git.
+
+client_id = "5f99bca8fb01ba7fb7bf235212689df5"
+name = "ChocoTrack Production"
+application_url = "https://192-241-157-72.sslip.io"
+embedded = true
+
+[access_scopes]
+scopes = "read_products,write_products,read_inventory,write_inventory,read_locations,read_inventory_transfers,write_inventory_transfers"
+use_legacy_install_flow = false
+
+[auth]
+redirect_urls = [ "https://192-241-157-72.sslip.io/auth/callback" ]
+
+[webhooks]
+api_version = "2026-07"
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/uninstalled"
+  topics = [ "app/uninstalled" ]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/scopes_update"
+  topics = [ "app/scopes_update" ]
+
+  [[webhooks.subscriptions]]
+  compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
+  uri = "/webhooks/compliance"
+
+[build]
+automatically_update_urls_on_dev = false

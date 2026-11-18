@@ -41,7 +41,7 @@ ssh root@<droplet-ip> "cat >> /home/deploy/.ssh/authorized_keys" < chocotrack-de
 ssh-keyscan -t ed25519 <droplet-ip-or-hostname>   # copy this output for DROPLET_KNOWN_HOSTS
 ```
 
-Keep `chocotrack-deploy` (private key) out of the repo; it goes into a GitHub secret and nowhere else.
+Generate the key pair in a folder outside the repo (for example `~/chocotrack-key`). The private key goes into a GitHub secret and nowhere else: paste it, then delete the local file (`rm -P chocotrack-deploy`). Never leave it, or a stray `.pub`, inside the project folder where `git add -A` could pick it up.
 
 ### 4. Put the configuration on the Droplet
 
@@ -66,7 +66,7 @@ In the repo settings, under Secrets and variables, Actions, add:
 | `DROPLET_SSH_KEY` | contents of `chocotrack-deploy` (private key) |
 | `DROPLET_KNOWN_HOSTS` | the `ssh-keyscan` output from step 3 |
 
-Optionally create an Environment named `production` (Settings, Environments) and add a required reviewer, so deploys wait for a click.
+The deploy job runs in a GitHub Environment named `production`, so add the four secrets **to that environment** (Settings, Environments, production, Environment secrets), or with `gh secret set <NAME> --env production`. Repository-level secrets are not needed. Optionally add a required reviewer there, so deploys wait for a click.
 
 ### 6. First deploy
 
@@ -76,13 +76,16 @@ Check it: `curl https://<APP_DOMAIN>/healthz` should print `ok`.
 
 ### 7. Point Shopify at the app
 
-The dev app (`shopify.app.toml`) rewrites its URLs every time someone runs `shopify app dev`, so production uses its own Shopify app. A template with everything pre-filled is in `choco-track/shopify.app.production.toml.example`:
+The dev app (`shopify.app.toml`) rewrites its URLs every time someone runs `shopify app dev`, so production uses its own Shopify app. The finished production config is committed as `choco-track/shopify.app.chocotrack-production.toml` (it holds only the public client ID, never the secret); `shopify.app.production.toml.example` is the template for a new store or hostname.
 
-1. In the Dev Dashboard, create a second app (for example "ChocoTrack Production").
-2. `cd choco-track && shopify app config link`, choose that app and name the config `production`. This writes `shopify.app.production.toml` with the real `client_id`.
-3. Make it match the template: set `application_url` and the redirect URL to `https://<APP_DOMAIN>`, keep the scopes and webhooks identical to `shopify.app.toml`, and set `automatically_update_urls_on_dev = false`.
-4. `shopify app deploy --config production` releases the URLs, scopes and webhook subscriptions (including the mandatory privacy webhooks).
-5. Copy the production app's API key and secret into the Droplet's `.env`, run `./deploy.sh`, then install the app on the store from the Dev Dashboard.
+1. In the Dev Dashboard, open Apps, click **Create app** and choose **Create app manually** (not the `npm init @shopify/app` option, which scaffolds a whole new project). Name it, for example, "ChocoTrack Production".
+2. `cd choco-track && shopify app config link`, choose that app. The CLI names the file after the app, here `shopify.app.chocotrack-production.toml`, and that name is what `--config` takes below. It writes only the client ID and some defaults, with **empty scopes and no webhooks**, so go on to step 3.
+3. Make it match the template: `application_url` is `https://<APP_DOMAIN>`, the redirect URL is `https://<APP_DOMAIN>/auth/callback` (the app signs in under `/auth`, not `/api/auth`), the scopes and webhooks are identical to `shopify.app.toml`, `api_version` is the one the app code uses (`2026-07`), and `automatically_update_urls_on_dev = false`.
+4. `shopify app deploy --config chocotrack-production` releases the URLs, scopes and webhook subscriptions (including the mandatory privacy webhooks).
+5. On the Droplet, edit `/opt/chocotrack/.env` (as `deploy`; mode 600): set `SHOPIFY_API_KEY` to the production app's client ID and `SHOPIFY_API_SECRET` to its secret (Dev Dashboard, the app's Settings page). One `NAME=value` per line, no spaces or quotes. Never paste the secret into chat or the repo. Then run `./deploy.sh`.
+6. Install the app on the store from the Dev Dashboard and approve the permissions (including the two inventory-transfer scopes). Open it from the store admin to check.
+
+If you change the hostname later: update `APP_DOMAIN` and `SHOPIFY_APP_URL` in `.env`, the two URLs in the production config, run `shopify app deploy --config chocotrack-production` again, then `./deploy.sh`.
 
 ## Day to day
 

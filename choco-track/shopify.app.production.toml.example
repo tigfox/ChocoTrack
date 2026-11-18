@@ -2,7 +2,7 @@
 #
 # 1. In the Dev Dashboard create a second app for production (for example "ChocoTrack Production").
 #    The dev app rewrites its URLs on every `shopify app dev`, so production needs its own app.
-# 2. Run `shopify app config link`, choose the production app and name the config "production".
+# 2. Run `shopify app config link`, choose the production app.
 #    That writes shopify.app.production.toml with the real client_id.
 # 3. Make it match this file: replace APP_DOMAIN below, keep the scopes and webhooks identical to
 #    shopify.app.toml, and set automatically_update_urls_on_dev = false.
@@ -33,7 +33,7 @@ api_version = "2026-07"
   uri = "/webhooks/compliance"
 
 [auth]
-redirect_urls = [ "https://APP_DOMAIN/api/auth" ]
+redirect_urls = [ "https://APP_DOMAIN/auth/callback" ]
 
 [build]
 include_config_on_deploy = true
