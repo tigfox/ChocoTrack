@@ -2,7 +2,7 @@
 
 A second section of ChocoTrack, and its main purpose: watch selected inventory against per-location targets, flag what is low, and suggest transfers between locations. The Sampler Builder (`sampler_builder.md`) stays as it is.
 
-**Status (2026-11-17): all development is done and waiting for human testing in the dev store.** Phases I0 to I6 (2026-11-13) plus the follow-up changes of 2026-11-17 are complete: draft-transfer links, pack sizes ("Send in multiples of"), a folded-up Settings page titled "ChocoTrack Settings", and typed kit sizes (1 to 48). 536 unit and render tests pass; nothing has been clicked through in a browser by a person yet. See the test checklist below. Production deploy is still blocked on the Droplet (see `sampler_builder.md`, Phase 7).
+**Status (2026-11-18): all development is done, the app is live on the Droplet and working in the dev store, and it is waiting for human testing of the checklist below.** Phases I0 to I6 (2026-11-13) plus the follow-up changes of 2026-11-17 are complete: draft-transfer links, pack sizes ("Send in multiples of"), a folded-up Settings page titled "ChocoTrack Settings", and typed kit sizes (1 to 48). 536 unit and render tests pass. Deployed to `https://192-241-157-72.sslip.io` with automatic deploys from `main`; see `sampler_builder.md`, Phase 7, for hosting and what remains (custom distribution for the real store, a real hostname, a larger Droplet, backups). Test on the production app: the checklist below applies unchanged.
 
 ## Decisions (from the store team)
 

@@ -17,9 +17,9 @@ A Shopify app that assembles "sampler kits" from mini chocolate bar inventory, u
 | 6 Hardening | Done (see below for what stays open) |
 | Feedback round 2 (Settings page, kit categories) | Done |
 | Error and edge-case pass | Done |
-| 7 Deploy | Files built and tested locally. **Hosting smoke test passed 2026-11-17** on a 512 MB Ubuntu 26.04 Droplet (192.241.157.72): bootstrap, image pull, healthy app, automatic HTTPS at `192-241-157-72.sslip.io`. Still needed from the store team: the production Shopify app (API key and secret), the four GitHub secrets, and a real hostname |
+| 7 Deploy | **Live on the Droplet (2026-11-18), installed and working in the dev store.** 512 MB Ubuntu 26.04 Droplet (192.241.157.72), `https://192-241-157-72.sslip.io`, automatic deploys from `main` through GitHub Actions. Production Shopify app "ChocoTrack Production" is released (`shopify.app.chocotrack-production.toml`). Left: choose distribution (custom, one store), a real hostname, a larger Droplet, backup cron |
 
-**Next, in order:** (1) store team provisions the Droplet and gives the hostname, then the production-readiness pass (real URLs, webhook version, `shopify app deploy --config production`); (2) optional fake-Shopify browser suite in CI; (3) confirm with the store team whether the screens now feel faster, then talk about deferred features.
+**Next, in order:** (1) human testing of Inventory and the Settings changes on the production app in the dev store (checklist in `inventory_tracker.md`); (2) set up **custom distribution** for the real store (Dev Dashboard, the app's Distribution page: enter the store's `.myshopify.com` domain, generate the install link, install as owner or staff who can install apps; the choice is one-way, so confirm the store first); (3) before real staff use: a real hostname instead of sslip.io (update `.env`, the two URLs in the production config, `shopify app deploy --config chocotrack-production`, `./deploy.sh`), a Droplet with 1 GB or more RAM, and the daily backup cron; (4) optional fake-Shopify browser suite in CI; (5) ask the store team whether the screens feel faster, then discuss deferred features.
 
 ## Decisions
 
@@ -176,7 +176,7 @@ Browser tests on the dev store, security review, error and empty states, README.
 - Related fix: `inventoryActivate` needs an idempotency key in API 2026-07, so brand-new kits could not be assembled at a location they were not yet stocked at. A live regression test now creates, assembles, disassembles and deletes a throwaway kit.
 - Browser tests added for: dropped connection (submit, settings, search), stale stock changed in Shopify, bar not stocked at a location, more kits than stock allows, duplicate SKU.
 
-### Phase 7 - Deploy  *(files built and tested locally; waiting on the Droplet, hostname and GitHub secrets)*
+### Phase 7 - Deploy  *(done 2026-11-18: running on the Droplet; distribution, hostname and sizing still to do)*
 
 Target: a small DigitalOcean Droplet. Everything is in `deploy/droplet/` with a step-by-step runbook (`README.md`).
 
@@ -185,7 +185,9 @@ Target: a small DigitalOcean Droplet. Everything is in `deploy/droplet/` with a 
 - **Server scripts:** `bootstrap.sh` (Docker, firewall, fail2ban, unattended upgrades, swap, `deploy` user), `deploy.sh` (pull, restart, wait for healthy; also rolls back by tag), `backup.sh` (daily SQLite backup, 14 days).
 - **CI/CD:** `.github/workflows/ci.yml` runs typecheck, lint, tests with the coverage gate and build for the app, then on `main` builds and pushes `ghcr.io/tigfox/chocotrack:<sha>` and deploys over SSH (skipped until the Droplet secrets exist).
 - **Database decision:** SQLite on the Droplet for now. It holds only OAuth sessions, so a separate PostgreSQL server would only use memory on a small VM. Moving to a platform without a persistent disk means switching the Prisma datasource to PostgreSQL; sessions are disposable, so no data migration.
-- **Left to do (needs the store team):** create the Droplet and hostname, add the four GitHub secrets, make the image package public, fill in `.env`, then `shopify app config link` and `shopify app deploy` for the production URLs.
+- **Done 2026-11-17 to 18:** bootstrap on Ubuntu 26.04.1 (Docker's apt repo supports the codename), image pulled anonymously from the public ghcr package, healthy app and a Let's Encrypt certificate for `192-241-157-72.sslip.io`, deploy key and the four secrets in the GitHub `production` environment (the deploy job runs in that environment, so repository-level secrets are not used), a CI deploy that passed end to end, the production Shopify app created with "Create app manually", its config completed (scopes, webhooks, `/auth/callback`, API `2026-07`) and released, real credentials in the server's `.env`, and the app installed and working in the dev store.
+- **Lessons:** keep `/opt/chocotrack/data` owned by uid 1000 (a recursive chown to `deploy` stops the app); the CLI names the config after the app (`chocotrack-production`, not `production`); the linked config starts with empty scopes and no webhooks; the app's sign-in path is `/auth/callback`.
+- **Left to do:** custom distribution for the live store; a real domain; Droplet size (512 MB used about 190 MB of swap while idle); the backup cron; password SSH login for root should be turned off now that keys work (the root password was shared in chat, so change it either way).
 
 ### Later
 
