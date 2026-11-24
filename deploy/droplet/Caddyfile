@@ -16,5 +16,13 @@
 		-Server
 	}
 
+	# Shopify always signs webhooks. Anything else aimed at /webhooks is turned away at the edge;
+	# the app still verifies the signature itself.
+	@unsigned_webhook {
+		path /webhooks/*
+		not header X-Shopify-Hmac-Sha256 *
+	}
+	respond @unsigned_webhook 401
+
 	reverse_proxy app:3000
 }
