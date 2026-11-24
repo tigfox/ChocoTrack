@@ -52,7 +52,7 @@ IMAGE_REF="$NEW_REF" docker compose pull || fail "could not pull ${NEW_REF}; not
 set_image "$NEW_REF" "$SHA"
 if docker compose up -d --remove-orphans && wait_healthy; then
   echo "$(date -u +%FT%TZ) $SHA $DIGEST" >> releases.log
-  docker image prune -f >/dev/null
+  docker image prune -af --filter "until=168h" >/dev/null  # keep a week of images for rollback
   echo "deployed ${SHA} (${DIGEST}): healthy"
   exit 0
 fi
