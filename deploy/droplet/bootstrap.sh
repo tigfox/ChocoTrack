@@ -118,6 +118,8 @@ chown "$DEPLOY_USER:$DEPLOY_USER" "/home/$DEPLOY_USER/.ssh/authorized_keys"
 
 # App + data directories. The container runs as uid 1000 and must own the data directory.
 install -d -m 755 -o "$DEPLOY_USER" -g "$DEPLOY_USER" "$APP_DIR"
+# Root-owned scripts the CI key may run (see ci-entry.sh); the deploy user cannot modify them.
+install -d -m 755 -o root -g root /usr/local/lib/chocotrack
 # data holds Shopify access tokens: private to uid 1000. Backups hold the same tokens: root only.
 install -d -m 700 -o 1000 -g 1000 "$APP_DIR/data"
 install -d -m 700 -o root -g root /var/backups/chocotrack
@@ -126,7 +128,9 @@ cat <<MSG
 
 Bootstrap complete. Next:
   1. In a SECOND terminal confirm: ssh $ADMIN_USER@<host> sudo -n true   (root and password logins are now refused)
-  2. Paste the CI deploy public key into /home/$DEPLOY_USER/.ssh/authorized_keys
-  3. As $DEPLOY_USER, put docker-compose.yml, Caddyfile and a filled-in .env in $APP_DIR
-  4. As $ADMIN_USER, add the backup cron: sudo crontab -e   ->   15 3 * * * /opt/chocotrack/backup.sh
+  2. From your laptop: deploy/droplet/push-stack.sh $ADMIN_USER@<host>   (installs compose, Caddyfile and the root-owned scripts)
+  3. Create /opt/chocotrack/.env from .env.example (owner $DEPLOY_USER, mode 600)
+  4. Add the CI key to /home/$DEPLOY_USER/.ssh/authorized_keys WITH its restriction, on one line:
+       restrict,command="/usr/local/lib/chocotrack/ci-entry.sh" ssh-ed25519 AAAA... github-actions-chocotrack
+  5. As $ADMIN_USER, add the backup cron: sudo crontab -e   ->   15 3 * * * /usr/local/lib/chocotrack/backup.sh
 MSG

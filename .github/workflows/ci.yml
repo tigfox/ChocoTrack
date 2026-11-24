@@ -58,16 +58,17 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push image
+        id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: choco-track
           push: true
-          tags: |
-            ${{ env.IMAGE }}:${{ github.sha }}
-            ${{ env.IMAGE }}:latest
+          tags: ${{ env.IMAGE }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # The deploy key's forced command (deploy/droplet/ci-entry.sh) accepts only "deploy <sha> <digest>".
+      # The image is pulled by digest, so what runs is exactly what this job just built.
       - name: Deploy over SSH
         if: env.DROPLET_HOST != ''
         env:
@@ -75,13 +76,13 @@ jobs:
           SSH_USER: ${{ secrets.DROPLET_USER }}
           SSH_KEY: ${{ secrets.DROPLET_SSH_KEY }}
           KNOWN_HOSTS: ${{ secrets.DROPLET_KNOWN_HOSTS }}
+          SHA: ${{ github.sha }}
+          DIGEST: ${{ steps.build.outputs.digest }}
         run: |
           set -euo pipefail
           install -m 700 -d ~/.ssh
           printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
-          SSH_OPTS="-i $HOME/.ssh/deploy_key -o UserKnownHostsFile=$HOME/.ssh/known_hosts -o StrictHostKeyChecking=yes"
-          scp $SSH_OPTS deploy/droplet/docker-compose.yml deploy/droplet/Caddyfile deploy/droplet/deploy.sh deploy/droplet/backup.sh \
-            "$SSH_USER@$HOST:/opt/chocotrack/"
-          ssh $SSH_OPTS "$SSH_USER@$HOST" "chmod +x /opt/chocotrack/deploy.sh /opt/chocotrack/backup.sh && /opt/chocotrack/deploy.sh ${{ github.sha }}"
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -o StrictHostKeyChecking=yes "$SSH_USER@$HOST" "deploy $SHA $DIGEST"
