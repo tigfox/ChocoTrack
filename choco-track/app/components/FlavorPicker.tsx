@@ -108,7 +108,7 @@ function PickerRow({ variant, available, count, demandMultiplier, onCount }: Row
       <s-stack gap="none">
         <s-text fontWeight={count > 0 ? "bold" : "base"}>{variant.title}</s-text>
         <s-text color="subdued">
-          {variant.sku} - {available === null ? "not stocked here" : `${available} available`}
+          {variant.group ? `${variant.group} - ` : ""}{variant.sku} - {available === null ? "not stocked here" : `${available} available`}
         </s-text>
       </s-stack>
       <s-stack direction="inline" gap="small" alignItems="center">

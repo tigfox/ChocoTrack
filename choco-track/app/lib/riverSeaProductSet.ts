@@ -1,4 +1,5 @@
 import type { ExportProduct, ExportVariant } from './riverSeaExport';
+import { DISPLAY_NAME_METAFIELD } from '../shopify/catalog';
 import { KIT_SIZE_METAFIELD, KIT_TAG } from './riverSeaKits';
 import type { StockLine } from './riverSeaStock';
 
@@ -7,6 +8,8 @@ export type ProductSetContext = {
   readonly categoryIds: Readonly<Record<string, string>>;
   readonly stockFor: (product: ExportProduct, variant: ExportVariant) => readonly StockLine[];
   /** Size of the kit this variant should be marked as, if any (tags the product and sets the variant metafield). */
+  /** A name to show for this variant, stored in its choco_track.display_name metafield. */
+  readonly displayNameFor?: (product: ExportProduct, variant: ExportVariant) => string | undefined;
   readonly kitSizeFor?: (product: ExportProduct, variant: ExportVariant) => number | undefined;
 };
 export type ProductSetInput = Record<string, unknown> & { readonly variants: readonly Record<string, unknown>[] };
@@ -17,6 +20,11 @@ const unique = <T>(list: readonly T[]): readonly T[] => [...new Set(list)];
 const buildVariant = (product: ExportProduct, v: ExportVariant, ctx: ProductSetContext): Record<string, unknown> => {
   const stock = ctx.stockFor(product, v);
   const kitSize = ctx.kitSizeFor?.(product, v);
+  const displayName = ctx.displayNameFor?.(product, v);
+  const metafields = [
+    ...(kitSize !== undefined ? [{ ...KIT_SIZE_METAFIELD, type: 'number_integer', value: String(kitSize) }] : []),
+    ...(displayName !== undefined ? [{ ...DISPLAY_NAME_METAFIELD, type: 'single_line_text_field', value: displayName }] : []),
+  ];
   return {
     optionValues: product.optionNames.map((optionName, i) => ({ optionName, name: v.optionValues[i] ?? '' })),
     sku: v.sku,
@@ -33,7 +41,7 @@ const buildVariant = (product: ExportProduct, v: ExportVariant, ctx: ProductSetC
       ...(v.grams !== null ? { measurement: { weight: { value: Number((v.grams / GRAMS_PER_POUND).toFixed(6)), unit: 'POUNDS' } } } : {}),
     },
     ...(stock.length > 0 ? { inventoryQuantities: stock } : {}),
-    ...(kitSize !== undefined ? { metafields: [{ ...KIT_SIZE_METAFIELD, type: 'number_integer', value: String(kitSize) }] } : {}),
+    ...(metafields.length > 0 ? { metafields } : {}),
   };
 };
 

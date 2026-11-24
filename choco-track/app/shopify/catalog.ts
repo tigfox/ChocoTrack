@@ -1,9 +1,13 @@
 import { parseKitSize } from '../domain/kitSize';
+import { humanizeFlavor, isFlavorSlug } from '../lib/flavorName';
 import type { Collection, StockMap, Variant } from '../domain/types';
 import type { GraphqlClient } from './client';
 
 /** Namespace/key of the VARIANT metafield that marks a variant as a sampler kit and holds its size. */
 export const KIT_SIZE_METAFIELD = { namespace: 'choco_track', key: 'kit_size' } as const;
+
+/** Optional variant metafield: the name to show for a flavor (set by the importer; staff can edit it in Shopify). */
+export const DISPLAY_NAME_METAFIELD = { namespace: 'choco_track', key: 'display_name' } as const;
 
 /** Optional kit setting on the variant: the collection (category) the mix picker starts on. */
 export const CATEGORY_METAFIELD = { namespace: 'choco_track', key: 'category' } as const;
@@ -31,6 +35,7 @@ const VARIANT_FIELDS = `
   sku
   barcode
   image { url }
+  displayName: metafield(namespace: "${DISPLAY_NAME_METAFIELD.namespace}", key: "${DISPLAY_NAME_METAFIELD.key}") { value }
   ${KIT_VARIANT_FIELDS}
   ${INVENTORY_ITEM}
   product {
@@ -63,6 +68,7 @@ export interface VariantNode {
   readonly barcode: string | null;
   readonly image: { readonly url: string } | null;
   /** Kit settings from the variant's metafields; absent or null for an ordinary variant. */
+  readonly displayName?: { readonly value: string } | null;
   readonly kitSize?: { readonly value: string } | null;
   readonly category?: { readonly value: string } | null;
   readonly inventoryItem: {
@@ -102,17 +108,24 @@ const toResult = (nodes: readonly VariantNode[]): CatalogResult => ({
 
 const DEFAULT_VARIANT_TITLE = 'Default Title';
 
+/** The category product's title without the shared "Mini Bars - " prefix ("Mini Bars - Rare" becomes "Rare"). */
+const groupLabel = (productTitle: string): string => productTitle.replace(/^Mini Bars - /i, '');
+
 export const toCatalogVariant = (node: VariantNode): CatalogVariant => {
   const imageUrl = node.image?.url ?? node.product.featuredMedia?.preview?.image?.url;
   const kitSize = parseKitSize(node.kitSize?.value);
   const categoryId = node.category?.value;
+  const isDefault = node.title === DEFAULT_VARIANT_TITLE;
+  // A flavor in a category product: the display name, else the humanized slug. Anything else keeps "Product - Variant".
+  const flavor = node.displayName?.value || (!isDefault && isFlavorSlug(node.title) ? humanizeFlavor(node.title) : undefined);
   return {
     id: node.id,
     inventoryItemId: node.inventoryItem.id,
-    title: node.title === DEFAULT_VARIANT_TITLE ? node.product.title : `${node.product.title} - ${node.title}`,
+    title: flavor ?? (isDefault ? node.product.title : `${node.product.title} - ${node.title}`),
     sku: node.sku ?? '',
     barcode: node.barcode ?? '',
     collectionIds: node.product.collections.nodes.map((c) => c.id),
+    ...(flavor && !isDefault ? { group: groupLabel(node.product.title) } : {}),
     ...(imageUrl ? { imageUrl } : {}),
     ...(kitSize ? { kitSize } : {}),
     ...(categoryId ? { categoryId } : {}),

@@ -1,6 +1,6 @@
 // Replaces every product in a DEVELOPMENT store with the River Sea product export, then sets starting stock.
 // Refuses to run against a store that is not a partner development store. Without --apply it only validates and prints a summary.
-// --finish skips the delete and import: it only syncs the collections (and, with --kits, marks the kit variants) on the store as it is.
+// --finish skips the delete and import: it only syncs the collections and flavor names (and, with --kits, marks the kit variants) on the store as it is.
 // Usage: npx esbuild scripts/import-river-sea.mjs --bundle --platform=node --format=esm --outfile=/tmp/import-river-sea.mjs && node /tmp/import-river-sea.mjs <store>.myshopify.com <products_export.csv> <Mini SKUs.csv> <inventory_export.csv> [--apply | --finish] [--kits]
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -9,6 +9,8 @@ import { groupProducts } from "../app/lib/riverSeaExport";
 import { buildProductSetInput } from "../app/lib/riverSeaProductSet";
 import { collectionSpecs, MINI_CATEGORIES, STALE_COLLECTION_TITLES } from "../app/lib/riverSeaCollections";
 import { KIT_SIZE_METAFIELD, KIT_TAG, kitSizeFor } from "../app/lib/riverSeaKits";
+import { miniDisplayName, nonMiniTitles } from "../app/lib/riverSeaNames";
+import { DISPLAY_NAME_METAFIELD } from "../app/shopify/catalog";
 import { parseInventory, actualStockKey } from "../app/lib/riverSeaInventory";
 import { applySkus, parseSkuCsv } from "../app/lib/riverSeaSkus";
 import { planStock, STOCK_LOCATIONS } from "../app/lib/riverSeaStock";
@@ -62,6 +64,22 @@ async function syncCollections() {
   }
 }
 
+// Display names on an already-imported store: write choco_track.display_name on each mini flavor variant.
+async function writeDisplayNamesInStore() {
+  for (const p of products) {
+    const names = new Map(p.variants.flatMap((v) => (displayNameFor(p, v) === undefined ? [] : [[v.optionValues.join("\u0000"), displayNameFor(p, v)]])));
+    if (names.size === 0) continue;
+    const found = run("query($h: String!) { productByHandle(handle: $h) { variants(first: 50) { nodes { id selectedOptions { value } } } } }", { h: p.handle }).productByHandle;
+    if (!found) throw new Error(`Store has no product ${p.handle}; run --apply first`);
+    const metafields = found.variants.nodes.flatMap((v) => {
+      const name = names.get(v.selectedOptions.map((o) => o.value).join("\u0000"));
+      return name === undefined ? [] : [{ ownerId: v.id, namespace: DISPLAY_NAME_METAFIELD.namespace, key: DISPLAY_NAME_METAFIELD.key, type: "single_line_text_field", value: name }];
+    });
+    userErrors(`names ${p.handle}`, run("mutation($m: [MetafieldsSetInput!]!) { metafieldsSet(metafields: $m) { userErrors { field message } } }", { m: metafields }, true).metafieldsSet.userErrors);
+    console.log(`named ${metafields.length} flavor(s) on ${p.handle}`);
+  }
+}
+
 // Kits on an already-imported store: tag each kit product and set the size on the variant.
 async function markKitsInStore() {
   for (const p of products) {
@@ -109,8 +127,10 @@ for (const name of new Set(products.map((p) => p.category).filter(Boolean))) {
 const random = seeded(2026);
 const actual = parseInventory(csvToRecords(parseCsv(readFileSync(inventoryPath, "utf8"))));
 const stockFor = (p, v) => planStock(p, v, locations, random, actual.get(actualStockKey(p.handle, v.optionValues)));
+const titles = nonMiniTitles(products);
+const displayNameFor = (p, v) => miniDisplayName(p, v, titles);
 const markKits = flags.includes("--kits");
-const inputs = products.map((p) => ({ handle: p.handle, input: buildProductSetInput(p, { categoryIds, stockFor, ...(markKits ? { kitSizeFor } : {}) }) }));
+const inputs = products.map((p) => ({ handle: p.handle, input: buildProductSetInput(p, { categoryIds, stockFor, displayNameFor, ...(markKits ? { kitSizeFor } : {}) }) }));
 const specs = collectionSpecs(products);
 
 const variants = products.flatMap((p) => p.variants);
@@ -135,8 +155,9 @@ if (flags.includes("--probe")) {
 }
 if (flags.includes("--finish")) {
   await syncCollections();
+  await writeDisplayNamesInStore();
   if (markKits) await markKitsInStore();
-  console.log("Finished collections" + (markKits ? " and kits." : "."));
+  console.log("Finished collections and flavor names" + (markKits ? " and kits." : "."));
   process.exit(0);
 }
 if (!apply) {

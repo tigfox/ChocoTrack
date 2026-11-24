@@ -31,6 +31,25 @@ describe('toCatalogVariant', () => {
   it('appends the variant title for multi-variant products', () => {
     expect(toCatalogVariant(node({ title: 'Large' })).title).toBe('Mini - Rum Caramel - Large');
   });
+  describe('flavor names for variants of a category product', () => {
+    const mini = (over: Partial<VariantNode>) => node({ title: 'rosemary-olive-oil', ...over }, { title: 'Mini Bars - Limited Editions' });
+    it('shows the display name metafield, with the category as the group', () => {
+      const v = toCatalogVariant(mini({ displayName: { value: 'Rosemary & Olive Oil' } }));
+      expect([v.title, v.group]).toEqual(['Rosemary & Olive Oil', 'Limited Editions']);
+    });
+    it('humanizes a hyphenated variant title when there is no metafield', () => {
+      const v = toCatalogVariant(mini({}));
+      expect([v.title, v.group]).toEqual(['Rosemary Olive Oil', 'Limited Editions']);
+    });
+    it('keeps the product-and-variant title for ordinary variants and sets no group', () => {
+      const v = toCatalogVariant(node({ title: '60g Bar' }, { title: 'Desert Flower' }));
+      expect([v.title, v.group]).toEqual(['Desert Flower - 60g Bar', undefined]);
+      expect(toCatalogVariant(node()).group).toBeUndefined();
+    });
+    it('keeps the full product title as the group when it has no Mini Bars prefix', () => {
+      expect(toCatalogVariant(node({ title: 'desert-flower' }, { title: 'Flavors' })).group).toBe('Flavors');
+    });
+  });
   it('prefers the variant image, then the product image', () => {
     const featured = { preview: { image: { url: 'p.png' } } };
     expect(toCatalogVariant(node({ image: { url: 'v.png' } }, { featuredMedia: featured })).imageUrl).toBe('v.png');
@@ -51,6 +70,14 @@ describe('toCatalogVariant', () => {
     expect(toCatalogVariant(node({ kitSize: { value: '7' } })).kitSize).toBe(7);
     expect(toCatalogVariant(node({ kitSize: { value: '49' } })).kitSize).toBeUndefined();
     expect(toCatalogVariant(node({ kitSize: { value: 'x' } })).kitSize).toBeUndefined();
+  });
+});
+
+describe('variant search query', () => {
+  it('asks for the display name metafield', async () => {
+    const client = fakeClient({ productVariants: { nodes: [] } });
+    await searchVariants(client);
+    expect(client.calls[0]?.query).toContain('displayName: metafield(namespace: "choco_track", key: "display_name")');
   });
 });
 

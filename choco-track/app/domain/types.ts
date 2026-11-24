@@ -17,6 +17,8 @@ export interface Variant {
   readonly sku: string;
   readonly barcode: string;
   readonly collectionIds: readonly string[];
+  /** Variants of a category product (a flavor in "Mini Bars - Rare"): the category, shown under the name. */
+  readonly group?: string;
   /** Product image (a Shopify image URL in the real app). */
   readonly imageUrl?: string;
   /** Present only on sellable kit variants. */

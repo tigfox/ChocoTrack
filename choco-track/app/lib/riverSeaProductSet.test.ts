@@ -49,6 +49,12 @@ describe('buildProductSetInput', () => {
     expect(out.tags).toEqual(['Bars', 'choco-track-kit']);
     expect((out.variants[0] as { metafields: unknown[] }).metafields).toEqual([{ namespace: 'choco_track', key: 'kit_size', type: 'number_integer', value: '12' }]);
   });
+  it('writes the display name on the variant, next to any kit size', () => {
+    const named = buildProductSetInput(product, { ...ctx, displayNameFor: () => 'Organic Milk Chocolate' });
+    expect((named.variants[0] as { metafields: unknown[] }).metafields).toEqual([{ namespace: 'choco_track', key: 'display_name', type: 'single_line_text_field', value: 'Organic Milk Chocolate' }]);
+    const both = buildProductSetInput(product, { ...ctx, kitSizeFor: () => 12, displayNameFor: () => 'X' });
+    expect((both.variants[0] as { metafields: { key: string }[] }).metafields.map((m) => m.key)).toEqual(['kit_size', 'display_name']);
+  });
   it('adds nothing kit-related when no variant is a kit', () => {
     const out = buildProductSetInput(product, { ...ctx, kitSizeFor: () => undefined });
     expect(out.tags).toEqual(['Bars']);
