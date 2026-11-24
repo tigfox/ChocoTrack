@@ -8,8 +8,9 @@ const variantNode = (id: string, sku: string, kitSize: string | null, qty = 4) =
   sku,
   barcode: null,
   image: null,
+  kitSize: kitSize ? { value: kitSize } : null,
   inventoryItem: { id: `i-${id}`, inventoryLevels: { nodes: [level('L1', qty)] } },
-  product: { title: sku, featuredMedia: null, collections: { nodes: [] }, kitSize: kitSize ? { value: kitSize } : null },
+  product: { title: sku, featuredMedia: null, collections: { nodes: [] } },
 });
 
 describe('loadWorkspace', () => {

@@ -7,8 +7,8 @@ const edit = { intent: 'update', kitId: 'gid://shopify/ProductVariant/1', title:
 const created = {
   productSet: {
     product: {
-      title: 'New', featuredMedia: null, collections: { nodes: [] }, kitSize: { value: '4' },
-      variants: { nodes: [{ id: 'v', title: 'Default Title', sku: 'N-4', barcode: null, image: null, inventoryItem: { id: 'i' } }] },
+      title: 'New', featuredMedia: null, collections: { nodes: [] },
+      variants: { nodes: [{ id: 'v', title: 'Default Title', sku: 'N-4', barcode: null, image: null, inventoryItem: { id: 'i' }, kitSize: { value: '4' } }] },
     },
     userErrors: [],
   },
@@ -21,7 +21,7 @@ describe('handleKitSettings', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it('saves an edit', async () => {
-    const client = fakeClient(kitNode, updated);
+    const client = fakeClient(kitNode, updated, { metafieldsSet: { metafields: [], userErrors: [] } });
     await expect(handleKitSettings(client, edit)).resolves.toEqual({ ok: true, message: 'Saved Milk 5.' });
   });
   it('creates a kit', async () => {

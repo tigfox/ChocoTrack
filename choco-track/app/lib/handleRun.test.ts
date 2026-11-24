@@ -13,11 +13,12 @@ const variantNode = (id: string, sku: string, kitSize: string | null, qty?: numb
   sku,
   barcode: null,
   image: null,
+  kitSize: kitSize ? { value: kitSize } : null,
   inventoryItem: {
     id: `gid://shopify/InventoryItem/${id.slice(-1)}`,
     inventoryLevels: { nodes: qty === undefined ? [] : [{ location: { id: L }, quantities: [{ quantity: qty }] }] },
   },
-  product: { title: sku, featuredMedia: null, collections: { nodes: [] }, kitSize: kitSize ? { value: kitSize } : null },
+  product: { title: sku, featuredMedia: null, collections: { nodes: [] } },
 });
 const stockNode = (id: string, qty: number) => ({
   id,

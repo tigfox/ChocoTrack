@@ -2,10 +2,10 @@ import { parseKitSize } from '../domain/kitSize';
 import type { Collection, StockMap, Variant } from '../domain/types';
 import type { GraphqlClient } from './client';
 
-/** Namespace/key of the product metafield that marks a product as a sampler kit and holds its size. */
+/** Namespace/key of the VARIANT metafield that marks a variant as a sampler kit and holds its size. */
 export const KIT_SIZE_METAFIELD = { namespace: 'choco_track', key: 'kit_size' } as const;
 
-/** Optional kit setting: the collection (category) the mix picker starts on. */
+/** Optional kit setting on the variant: the collection (category) the mix picker starts on. */
 export const CATEGORY_METAFIELD = { namespace: 'choco_track', key: 'category' } as const;
 
 
@@ -13,6 +13,11 @@ export const CATEGORY_METAFIELD = { namespace: 'choco_track', key: 'category' } 
 export interface CatalogVariant extends Variant {
   readonly inventoryItemId: string;
 }
+
+/** The kit settings, read from the variant (a product such as "Mini Bars (Assorted)" can hold kits of different sizes). */
+export const KIT_VARIANT_FIELDS = `
+  kitSize: metafield(namespace: "${KIT_SIZE_METAFIELD.namespace}", key: "${KIT_SIZE_METAFIELD.key}") { value }
+  category: metafield(namespace: "${CATEGORY_METAFIELD.namespace}", key: "${CATEGORY_METAFIELD.key}") { value }`;
 
 /** Stock rides along with every variant read, so no second round trip is needed. */
 const INVENTORY_ITEM = `inventoryItem {
@@ -26,13 +31,12 @@ const VARIANT_FIELDS = `
   sku
   barcode
   image { url }
+  ${KIT_VARIANT_FIELDS}
   ${INVENTORY_ITEM}
   product {
     title
     featuredMedia { preview { image { url } } }
     collections(first: 25) { nodes { id } }
-    kitSize: metafield(namespace: "${KIT_SIZE_METAFIELD.namespace}", key: "${KIT_SIZE_METAFIELD.key}") { value }
-    category: metafield(namespace: "${CATEGORY_METAFIELD.namespace}", key: "${CATEGORY_METAFIELD.key}") { value }
   }
 `;
 
@@ -58,6 +62,9 @@ export interface VariantNode {
   readonly sku: string | null;
   readonly barcode: string | null;
   readonly image: { readonly url: string } | null;
+  /** Kit settings from the variant's metafields; absent or null for an ordinary variant. */
+  readonly kitSize?: { readonly value: string } | null;
+  readonly category?: { readonly value: string } | null;
   readonly inventoryItem: {
     readonly id: string;
     /** Absent when the node was fetched without stock (for example right after creating a kit). */
@@ -72,8 +79,6 @@ export interface VariantNode {
     readonly title: string;
     readonly featuredMedia: { readonly preview: { readonly image: { readonly url: string } | null } | null } | null;
     readonly collections: { readonly nodes: ReadonlyArray<{ readonly id: string }> };
-    readonly kitSize: { readonly value: string } | null;
-    readonly category?: { readonly value: string } | null;
   };
 }
 
@@ -99,8 +104,8 @@ const DEFAULT_VARIANT_TITLE = 'Default Title';
 
 export const toCatalogVariant = (node: VariantNode): CatalogVariant => {
   const imageUrl = node.image?.url ?? node.product.featuredMedia?.preview?.image?.url;
-  const kitSize = parseKitSize(node.product.kitSize?.value);
-  const categoryId = node.product.category?.value;
+  const kitSize = parseKitSize(node.kitSize?.value);
+  const categoryId = node.category?.value;
   return {
     id: node.id,
     inventoryItemId: node.inventoryItem.id,
@@ -156,6 +161,8 @@ export const searchVariants = async (
 /** Tag on every kit product; the kit-size metafield holds the size. */
 export const KIT_TAG = 'choco-track-kit';
 
+const KIT_VARIANTS_PER_PRODUCT = 50;
+
 const KITS_QUERY = `#graphql
   query Kits {
     products(first: 50, query: "tag:${KIT_TAG}") {
@@ -163,10 +170,8 @@ const KITS_QUERY = `#graphql
         title
         featuredMedia { preview { image { url } } }
         collections(first: 25) { nodes { id } }
-        kitSize: metafield(namespace: "${KIT_SIZE_METAFIELD.namespace}", key: "${KIT_SIZE_METAFIELD.key}") { value }
-        category: metafield(namespace: "${CATEGORY_METAFIELD.namespace}", key: "${CATEGORY_METAFIELD.key}") { value }
-        variants(first: 10) {
-          nodes { id title sku barcode image { url } ${INVENTORY_ITEM} }
+        variants(first: ${KIT_VARIANTS_PER_PRODUCT}) {
+          nodes { id title sku barcode image { url } ${KIT_VARIANT_FIELDS} ${INVENTORY_ITEM} }
         }
       }
     }
