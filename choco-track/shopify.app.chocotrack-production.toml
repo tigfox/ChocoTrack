@@ -4,7 +4,7 @@
 
 client_id = "5f99bca8fb01ba7fb7bf235212689df5"
 name = "ChocoTrack Production"
-application_url = "https://192-241-157-72.sslip.io"
+application_url = "https://chocotrack.franson.nyc"
 embedded = true
 
 [access_scopes]
@@ -12,7 +12,7 @@ scopes = "read_products,write_products,read_inventory,write_inventory,read_locat
 use_legacy_install_flow = false
 
 [auth]
-redirect_urls = [ "https://192-241-157-72.sslip.io/auth/callback" ]
+redirect_urls = [ "https://chocotrack.franson.nyc/auth/callback" ]
 
 [webhooks]
 api_version = "2026-07"
