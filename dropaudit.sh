@@ -58,8 +58,9 @@ sh_ 'find /opt/chocotrack /var/backups/chocotrack -perm -o+r -type f 2>/dev/null
 echo "(files above are world-readable; .env, sessions.sqlite and backups should NOT appear)"
 sh_ "grep -c . $APP/.env | xargs echo '.env line count:'"
 sh_ "grep -E '^[A-Z_]+=' $APP/.env | cut -d= -f1 | sort | tr '\n' ' '; echo"
-sh_ "grep -E '^(APP_DOMAIN|SHOPIFY_APP_URL|IMAGE_TAG|SCOPES)=' $APP/.env"
-sh_ 'sudo -u deploy crontab -l'
+sh_ "grep -E '^(APP_DOMAIN|SHOPIFY_APP_URL|IMAGE_REF|DEPLOYED_SHA|SCOPES)=' $APP/.env"
+sh_ 'sudo crontab -l'
+sh_ 'ls -l /usr/local/lib/chocotrack/; tail -3 /opt/chocotrack/releases.log'
 sh_ 'ls -la /etc/cron.d /etc/cron.daily 2>/dev/null | head -30'
 sh_ 'sudo find / -xdev -perm -4000 -type f 2>/dev/null | head -40'
 

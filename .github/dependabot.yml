@@ -24,6 +24,10 @@ updates:
     directory: /choco-track
     schedule:
       interval: monthly
+  - package-ecosystem: docker-compose
+    directory: /deploy/droplet
+    schedule:
+      interval: monthly
   - package-ecosystem: github-actions
     directory: /
     schedule:

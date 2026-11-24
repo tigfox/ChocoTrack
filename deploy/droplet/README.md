@@ -50,10 +50,8 @@ Generate the key pair in a folder outside the repo (for example `~/chocotrack-ke
 Keep `/opt/chocotrack/data` owned by uid 1000 (the app's user) with mode 700, and `sessions.sqlite` at 600: it holds live Shopify access tokens. Do not run a recursive `chown deploy:deploy` over `/opt/chocotrack`: the app then exits with "/data is not writable by uid 1000". Fix with `chown 1000:1000 /opt/chocotrack/data`.
 
 ```bash
-scp deploy/droplet/{docker-compose.yml,Caddyfile,deploy.sh,backup.sh,.env.example} <you>@<droplet>:/tmp/
+deploy/droplet/push-stack.sh <you>@<droplet>   # installs compose, Caddyfile, .env.example and the root-owned scripts
 ssh <you>@<droplet>
-sudo install -m 644 -o deploy -g deploy /tmp/{docker-compose.yml,Caddyfile,.env.example} /opt/chocotrack/
-sudo install -m 755 -o deploy -g deploy /tmp/{deploy.sh,backup.sh} /opt/chocotrack/
 sudo -iu deploy
 cd /opt/chocotrack && cp .env.example .env && chmod 600 .env && nano .env
 ```
@@ -75,7 +73,7 @@ The deploy job runs in a GitHub Environment named `production`, so add the four 
 
 ### 6. First deploy
 
-Push to `main`. CI runs the tests, builds and pushes the image, copies the stack files and runs `deploy.sh`, which waits for the app's health check. The first image push creates a package under your GitHub profile: open its settings and set visibility to **Public** so the Droplet can pull it without credentials (the image contains no secrets; configuration comes from `.env`). Re-run the failed deploy afterwards if the first pull was denied.
+Push to `main`. CI runs the tests, builds and pushes the image, then SSHes in with the restricted deploy key and asks for `deploy <sha> <image digest>`. `deploy.sh` pulls that exact digest, waits for the app's health check, records it in `releases.log`, and rolls back to the previous image if the new one is not healthy. CI never copies files to the host: to change the compose file, Caddyfile or scripts, merge the change and run `deploy/droplet/push-stack.sh` yourself. The first image push creates a package under your GitHub profile: open its settings and set visibility to **Public** so the Droplet can pull it without credentials (the image contains no secrets; configuration comes from `.env`). Re-run the failed deploy afterwards if the first pull was denied.
 
 Check it: `curl https://<APP_DOMAIN>/healthz` should print `ok`.
 
@@ -87,17 +85,17 @@ The dev app (`shopify.app.toml`) rewrites its URLs every time someone runs `shop
 2. `cd choco-track && shopify app config link`, choose that app. The CLI names the file after the app, here `shopify.app.chocotrack-production.toml`, and that name is what `--config` takes below. It writes only the client ID and some defaults, with **empty scopes and no webhooks**, so go on to step 3.
 3. Make it match the template: `application_url` is `https://<APP_DOMAIN>`, the redirect URL is `https://<APP_DOMAIN>/auth/callback` (the app signs in under `/auth`, not `/api/auth`), the scopes and webhooks are identical to `shopify.app.toml`, `api_version` is the one the app code uses (`2026-07`), and `automatically_update_urls_on_dev = false`.
 4. `shopify app deploy --config chocotrack-production` releases the URLs, scopes and webhook subscriptions (including the mandatory privacy webhooks).
-5. On the Droplet, edit `/opt/chocotrack/.env` (as `deploy`; mode 600): set `SHOPIFY_API_KEY` to the production app's client ID and `SHOPIFY_API_SECRET` to its secret (Dev Dashboard, the app's Settings page). One `NAME=value` per line, no spaces or quotes. Never paste the secret into chat or the repo. Then run `./deploy.sh`.
+5. On the Droplet, edit `/opt/chocotrack/.env` (as `deploy`; mode 600): set `SHOPIFY_API_KEY` to the production app's client ID and `SHOPIFY_API_SECRET` to its secret (Dev Dashboard, the app's Settings page). One `NAME=value` per line, no spaces or quotes. Never paste the secret into chat or the repo. Then restart with `docker compose up -d` (or let the next deploy do it).
 6. Install the app on the store from the Dev Dashboard and approve the permissions (including the two inventory-transfer scopes). Open it from the store admin to check.
 
-If you change the hostname later: update `APP_DOMAIN` and `SHOPIFY_APP_URL` in `.env`, the two URLs in the production config, run `shopify app deploy --config chocotrack-production` again, then `./deploy.sh`.
+If you change the hostname later: update `APP_DOMAIN` and `SHOPIFY_APP_URL` in `.env`, the two URLs in the production config, run `shopify app deploy --config chocotrack-production` again, then `docker compose up -d` in `/opt/chocotrack`.
 
 ## Day to day
 
 | Task | Command (on the Droplet, in `/opt/chocotrack`) |
 |---|---|
 | Deploy | automatic on every push to `main` |
-| Roll back | `./deploy.sh <older-commit-sha>` (tags are commit SHAs) |
+| Roll back | `/usr/local/lib/chocotrack/deploy.sh <older-commit-sha>` (looks the digest up in `releases.log`) |
 | Logs | `docker compose logs -f app` (or `caddy`) |
 | Status | `docker compose ps` |
 | Restart | `docker compose restart app` |
@@ -107,7 +105,7 @@ If you change the hostname later: update `APP_DOMAIN` and `SHOPIFY_APP_URL` in `
 ```bash
 sudo crontab -e   # root's crontab: the data directory is private to the container user
 # daily at 03:15
-15 3 * * * /opt/chocotrack/backup.sh
+15 3 * * * /usr/local/lib/chocotrack/backup.sh
 ```
 
 Backups go to `/var/backups/chocotrack` (mode 700, root only; 14 days kept). **Each backup contains live Shopify access tokens**: treat it as a credential, and encrypt it (for example with `age`) before copying it off the Droplet. To restore: stop the app, copy a backup over `/opt/chocotrack/data/sessions.sqlite`, make it owned by uid 1000, start the app. For off-box copies, sync that folder to a DigitalOcean Space or similar.
@@ -119,6 +117,8 @@ Security updates install automatically. For kernel updates, reboot occasionally 
 ## Security notes
 
 - Only ports 22, 80 and 443 are open. SSH is key-only and root login is off. The CI user (`deploy`) is in the `docker` group, which is **root-equivalent**: protect `DROPLET_SSH_KEY` accordingly (environment-scoped secret, required reviewer, protected `main`).
+- **The CI key is restricted.** In `authorized_keys` it carries `restrict,command="/usr/local/lib/chocotrack/ci-entry.sh"`, so it cannot open a shell, copy files or forward ports; it can only run `deploy <40-hex sha> <sha256 digest>` of this repo's image. The scripts it can reach are root-owned in `/usr/local/lib/chocotrack`, and the compose file and Caddyfile are root-owned too, so a leaked key or a hostile workflow cannot reach the host itself, only deploy an image to the hardened container. A merged change to `main` can still ship hostile *application* code, so keep the branch ruleset, CODEOWNERS and the required reviewer on `production`.
+- Images are pulled by digest (`IMAGE_REF` in `.env`, Caddy and the Node base image pinned in the compose file and Dockerfile; Dependabot bumps them), so a re-pushed registry tag cannot change what runs.
 - Never add a `ports:` entry for the app: Docker publishes ports through iptables and bypasses the ufw rules. A systemd unit (`block-metadata.service`) stops containers reaching the cloud metadata service.
 - Both containers run with a read-only filesystem, no capabilities (Caddy keeps only `NET_BIND_SERVICE`) and `no-new-privileges`. `/app` in the image is root-owned.
 - `sudo bash dropaudit.sh` (repo root) is a read-only audit of the host; run it after any change here.
