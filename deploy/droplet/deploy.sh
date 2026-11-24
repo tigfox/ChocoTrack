@@ -46,18 +46,18 @@ wait_healthy() {
   return 1
 }
 
-set_image "$NEW_REF" "$SHA"
-docker compose pull
-docker compose up -d --remove-orphans
+# Pull first, with the new ref passed in the environment, so a failed pull changes nothing on disk.
+IMAGE_REF="$NEW_REF" docker compose pull || fail "could not pull ${NEW_REF}; nothing was changed"
 
-if wait_healthy; then
+set_image "$NEW_REF" "$SHA"
+if docker compose up -d --remove-orphans && wait_healthy; then
   echo "$(date -u +%FT%TZ) $SHA $DIGEST" >> releases.log
   docker image prune -f >/dev/null
   echo "deployed ${SHA} (${DIGEST}): healthy"
   exit 0
 fi
 
-echo "app did not become healthy; recent logs:" >&2
+echo "new image did not start healthy; recent logs:" >&2
 docker compose logs --tail=40 app >&2
 if [ -n "$PREVIOUS_REF" ]; then
   echo "rolling back to ${PREVIOUS_REF}" >&2
