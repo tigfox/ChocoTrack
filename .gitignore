@@ -8,3 +8,11 @@ coverage/
 test-results/
 playwright-report/
 !.env.example
+
+# Local secrets (never commit)
+.local
+
+# Deploy keys must never live in the repo
+chocotrack-deploy*
+*.pem
+id_*

@@ -1,0 +1,10 @@
+# Changes to the delivery path and deployment config need the owner's review.
+# The branch ruleset requires code-owner review, so this file is what makes that rule apply.
+/.github/                                   @tigfox
+/deploy/                                    @tigfox
+/dropaudit.sh                               @tigfox
+/choco-track/Dockerfile                     @tigfox
+/choco-track/docker-entrypoint.sh           @tigfox
+/choco-track/.dockerignore                  @tigfox
+/choco-track/shopify.app*.toml              @tigfox
+/choco-track/prisma/                        @tigfox
