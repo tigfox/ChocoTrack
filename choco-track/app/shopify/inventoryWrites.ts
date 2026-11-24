@@ -149,7 +149,7 @@ export const buildProductQuery = (text: string, collectionId?: string): string |
 
 const SEARCH_PRODUCTS = `#graphql
   query ProductsToFlag($query: String, $first: Int!) {
-    products(first: $first, query: $query) {
+    products(first: $first, query: $query, sortKey: TITLE) {
       nodes {
         id
         title

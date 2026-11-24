@@ -155,4 +155,14 @@ describe('searchProductsForFlag', () => {
     ]);
     expect(client.calls[0]?.variables).toMatchObject({ query: 'x', first: 25 });
   });
+  it('sorts by title, so the list does not depend on the order products were created in', async () => {
+    const client = fakeClient({ products: { nodes: [] } });
+    await searchProductsForFlag(client, { text: '' });
+    expect(client.calls[0]?.query).toContain('sortKey: TITLE');
+  });
+  it('asks for as many products as requested', async () => {
+    const client = fakeClient({ products: { nodes: [] } });
+    await searchProductsForFlag(client, { text: '', first: 100 });
+    expect(client.calls[0]?.variables).toMatchObject({ first: 100 });
+  });
 });
