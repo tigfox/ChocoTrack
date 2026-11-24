@@ -8,3 +8,13 @@ coverage
 prisma/*.sqlite*
 *.log
 .react-router
+e2e
+.mcp.json
+.cursor
+.gemini
+.vscode
+scripts
+*.md
+!README.md
+Dockerfile
+.dockerignore

@@ -18,18 +18,20 @@ A Basic Droplet with 1 vCPU and 1-2 GB RAM, running Ubuntu 24.04 or 26.04 LTS, i
 
 ### 1. Create the Droplet and a hostname
 
-1. Create an Ubuntu 24.04 Droplet and add your SSH key (no password login).
-2. Point a hostname at its IP: an `A` record such as `chocotrack.<your-domain>`. For a first test without a domain, `<ip-with-dashes>.sslip.io` (for example `203-0-113-10.sslip.io`) resolves to the IP and gets a real certificate.
+1. Create an Ubuntu 24.04 (or newer LTS) Droplet. A root password or key is only needed for the first step below; `bootstrap.sh` replaces it with a named admin account and turns root and password logins off.
+2. Point a hostname at its IP: an `A` record such as `chocotrack.<your-domain>`. If the DNS provider can proxy traffic (Cloudflare), set the record to DNS-only so Caddy can get its certificate. For a throwaway test without a domain, `<ip-with-dashes>.sslip.io` works, but never use it with the production Shopify app: sslip.io is a third party's DNS and the IP can be reassigned.
 3. Shopify requires HTTPS on a stable URL; Caddy gets and renews the certificate automatically once the hostname resolves and ports 80/443 are open.
 
 ### 2. Bootstrap the VM
 
 ```bash
 scp deploy/droplet/bootstrap.sh root@<droplet-ip>:
-ssh root@<droplet-ip> 'bash bootstrap.sh'
+ssh root@<droplet-ip> 'ADMIN_USER=<you> ADMIN_PUBKEY="$(cat ~/.ssh/id_ed25519.pub)" bash bootstrap.sh'
 ```
 
-This installs Docker, a firewall (SSH, 80, 443 only), fail2ban, automatic security updates, 1 GB swap, a `deploy` user, `/opt/chocotrack` and a backup folder. It is safe to run again.
+This installs Docker, a firewall (SSH, 80, 443 only), fail2ban, automatic security updates (including Docker's packages, with a 04:00 reboot when needed), 1 GB swap, an admin user with your key and passwordless sudo, a `deploy` user for CI, `/opt/chocotrack` and a backup folder. It also **turns off root and password SSH logins** (`/etc/ssh/sshd_config.d/00-hardening.conf`, `AllowUsers <you> deploy`) and blocks containers from the cloud metadata address. Keep the root session open and, from a second terminal, check `ssh <you>@<droplet-ip> sudo -n true` before closing it. From here on, work as the admin user, never as root. It is safe to run again.
+
+If the key has a passphrase, load it first (`ssh-add --apple-use-keychain ~/.ssh/id_ed25519`).
 
 ### 3. Create a CI deploy key
 
@@ -45,11 +47,14 @@ Generate the key pair in a folder outside the repo (for example `~/chocotrack-ke
 
 ### 4. Put the configuration on the Droplet
 
-Keep `/opt/chocotrack/data` owned by uid 1000 (the app's user). Do not run a recursive `chown deploy:deploy` over `/opt/chocotrack`: the app then exits with "/data is not writable by uid 1000". Fix with `chown 1000:1000 /opt/chocotrack/data`.
+Keep `/opt/chocotrack/data` owned by uid 1000 (the app's user) with mode 700, and `sessions.sqlite` at 600: it holds live Shopify access tokens. Do not run a recursive `chown deploy:deploy` over `/opt/chocotrack`: the app then exits with "/data is not writable by uid 1000". Fix with `chown 1000:1000 /opt/chocotrack/data`.
 
 ```bash
-scp deploy/droplet/{docker-compose.yml,Caddyfile,deploy.sh,backup.sh,.env.example} deploy@<droplet>:/opt/chocotrack/
-ssh deploy@<droplet>
+scp deploy/droplet/{docker-compose.yml,Caddyfile,deploy.sh,backup.sh,.env.example} <you>@<droplet>:/tmp/
+ssh <you>@<droplet>
+sudo install -m 644 -o deploy -g deploy /tmp/{docker-compose.yml,Caddyfile,.env.example} /opt/chocotrack/
+sudo install -m 755 -o deploy -g deploy /tmp/{deploy.sh,backup.sh} /opt/chocotrack/
+sudo -iu deploy
 cd /opt/chocotrack && cp .env.example .env && chmod 600 .env && nano .env
 ```
 
@@ -66,7 +71,7 @@ In the repo settings, under Secrets and variables, Actions, add:
 | `DROPLET_SSH_KEY` | contents of `chocotrack-deploy` (private key) |
 | `DROPLET_KNOWN_HOSTS` | the `ssh-keyscan` output from step 3 |
 
-The deploy job runs in a GitHub Environment named `production`, so add the four secrets **to that environment** (Settings, Environments, production, Environment secrets), or with `gh secret set <NAME> --env production`. Repository-level secrets are not needed. Optionally add a required reviewer there, so deploys wait for a click.
+The deploy job runs in a GitHub Environment named `production`, so add the four secrets **to that environment** (Settings, Environments, production, Environment secrets), or with `gh secret set <NAME> --env production`. Repository-level secrets are not needed. **Add a required reviewer** and restrict deployment branches to `main` (Settings, Environments, production). The deploy key can start containers, which is root-equivalent on the Droplet, so this gate and the branch ruleset on `main` are what stand between a stolen or merged change and the host. Add a `CODEOWNERS` file (done: `.github/CODEOWNERS`) and keep secrets at the environment level only.
 
 ### 6. First deploy
 
@@ -100,12 +105,12 @@ If you change the hostname later: update `APP_DOMAIN` and `SHOPIFY_APP_URL` in `
 ### Backups
 
 ```bash
-sudo -u deploy crontab -e
+sudo crontab -e   # root's crontab: the data directory is private to the container user
 # daily at 03:15
 15 3 * * * /opt/chocotrack/backup.sh
 ```
 
-Backups go to `/var/backups/chocotrack` (14 days kept). To restore: stop the app, copy a backup over `/opt/chocotrack/data/sessions.sqlite`, make it owned by uid 1000, start the app. For off-box copies, sync that folder to a DigitalOcean Space or similar.
+Backups go to `/var/backups/chocotrack` (mode 700, root only; 14 days kept). **Each backup contains live Shopify access tokens**: treat it as a credential, and encrypt it (for example with `age`) before copying it off the Droplet. To restore: stop the app, copy a backup over `/opt/chocotrack/data/sessions.sqlite`, make it owned by uid 1000, start the app. For off-box copies, sync that folder to a DigitalOcean Space or similar.
 
 ### Updating the server
 
@@ -113,8 +118,11 @@ Security updates install automatically. For kernel updates, reboot occasionally 
 
 ## Security notes
 
-- Only ports 22, 80 and 443 are open. SSH is key-only; the CI user can run Docker but has no root.
-- `.env` holds the Shopify secret: mode 600, never in git. Rotate the secret in the Dev Dashboard if it is ever exposed.
+- Only ports 22, 80 and 443 are open. SSH is key-only and root login is off. The CI user (`deploy`) is in the `docker` group, which is **root-equivalent**: protect `DROPLET_SSH_KEY` accordingly (environment-scoped secret, required reviewer, protected `main`).
+- Never add a `ports:` entry for the app: Docker publishes ports through iptables and bypasses the ufw rules. A systemd unit (`block-metadata.service`) stops containers reaching the cloud metadata service.
+- Both containers run with a read-only filesystem, no capabilities (Caddy keeps only `NET_BIND_SERVICE`) and `no-new-privileges`. `/app` in the image is root-owned.
+- `sudo bash dropaudit.sh` (repo root) is a read-only audit of the host; run it after any change here.
+- `.env` holds the Shopify secret: mode 600, never in git. Keep local credential files such as `.local` out of git too. Rotate the secret in the Dev Dashboard if it is ever exposed.
 - The container runs as an unprivileged user with a memory limit; Caddy sets HSTS and other basic headers. The app sets its own frame policy so Shopify can embed it.
 
 ## Moving on

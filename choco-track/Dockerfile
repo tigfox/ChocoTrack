@@ -14,10 +14,13 @@ RUN npm ci --omit=dev && npm cache clean --force
 
 COPY . .
 
+# /app stays root-owned (read-only for the runtime user); only /data is writable.
+# prisma/schema.prisma points at file:dev.sqlite, so link it to the volume at build time.
 RUN npm run build \
   && npx prisma generate \
   && mkdir -p /data \
-  && chown -R node:node /app /data
+  && ln -s /data/sessions.sqlite prisma/dev.sqlite \
+  && chown node:node /data
 
 USER node
 

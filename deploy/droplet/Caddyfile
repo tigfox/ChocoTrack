@@ -1,3 +1,8 @@
+{
+	# The admin API is not needed here; turn it off entirely.
+	admin off
+}
+
 {$APP_DOMAIN} {
 	encode zstd gzip
 
@@ -6,6 +11,8 @@
 		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		Cross-Origin-Opener-Policy "same-origin-allow-popups"
 		-Server
 	}
 

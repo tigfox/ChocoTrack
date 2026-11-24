@@ -6,6 +6,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 TAG="${1:-latest}"
 
+[[ "$TAG" =~ ^([0-9a-f]{7,40}|latest)$ ]] || { echo "invalid tag: $TAG" >&2; exit 1; }
 [ -f .env ] || { echo "missing .env (copy .env.example and fill it in)" >&2; exit 1; }
 if grep -q '^IMAGE_TAG=' .env; then
   sed -i "s|^IMAGE_TAG=.*|IMAGE_TAG=${TAG}|" .env
