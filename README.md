@@ -8,6 +8,8 @@ A Shopify embedded admin app with two parts. Shopify holds all records; the app 
 | Folder | What |
 |---|---|
 | `choco-track/` | The Shopify app (React Router, TypeScript, Polaris web components, Prisma for sessions) |
+| `deploy/droplet/` | The production stack (Docker Compose, Caddy, scripts) and its runbook |
+| `dropaudit.sh` | Read-only security audit of the Droplet |
 | `mockup/` | The clickable mockup used for store-team feedback (Vite + Docker, fake data). **Frozen** - kept for reference only |
 
 ## Run the app (development)
@@ -43,7 +45,7 @@ node scripts/upload-dev-images.mjs <store>.myshopify.com   # skips products that
 
 ```bash
 npm run typecheck && npm run lint && npm run build
-npm run test:coverage                                # unit tests, 80% gate (currently 100% lines)
+npm run test:coverage                                # unit and render tests, 80% gate (547 tests, 99% lines)
 LIVE_STORE=<store>.myshopify.com npm run test:live  # real queries + an assemble/disassemble round trip (net zero)
 ```
 
@@ -59,4 +61,6 @@ cd mockup && docker compose up --build   # http://localhost:8080
 
 ## Deploy
 
-Initial hosting is a small DigitalOcean Droplet (Docker Compose, Caddy HTTPS, SQLite sessions). Setup, secrets, deploys, rollback and backups are in [`deploy/droplet/README.md`](deploy/droplet/README.md). CI/CD is `.github/workflows/ci.yml`. If the app outgrows the Droplet, see "Moving on" in that file.
+Production runs at `https://chocotrack.franson.nyc` on a small DigitalOcean Droplet (Docker Compose, Caddy with a Let's Encrypt certificate, SQLite sessions). Setup, secrets, deploys, rollback and backups are in [`deploy/droplet/README.md`](deploy/droplet/README.md). CI/CD is `.github/workflows/ci.yml`: a push to `main` runs the checks, builds the image, and (after a reviewer approves the `production` environment) deploys it by digest through a restricted SSH key. If the app outgrows the Droplet, see "Moving on" in that file.
+
+Security posture, in short: key-only SSH with no root login, read-only containers with no capabilities, images pinned by digest, a CI key that can only deploy an image, private and backed-up session data, unsigned webhooks rejected at the edge, and a blank public home page (`/` shows nothing; Shopify's `?shop=` visits are forwarded into the app). The latest findings and what is deliberately deferred are in "Security review" in [`sampler_builder.md`](sampler_builder.md).

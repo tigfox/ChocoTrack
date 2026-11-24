@@ -39,9 +39,12 @@ On your laptop:
 
 ```bash
 ssh-keygen -t ed25519 -f chocotrack-deploy -N "" -C "github-actions-chocotrack"
-ssh root@<droplet-ip> "cat >> /home/deploy/.ssh/authorized_keys" < chocotrack-deploy.pub
+# install the public key WITH its restriction (one line; root login is off, so use the admin account)
+ssh <you>@<droplet-ip> "echo 'restrict,command=\"/usr/local/lib/chocotrack/ci-entry.sh\" $(cat chocotrack-deploy.pub)' | sudo tee -a /home/deploy/.ssh/authorized_keys >/dev/null"
 ssh-keyscan -t ed25519 <droplet-ip-or-hostname>   # copy this output for DROPLET_KNOWN_HOSTS
 ```
+
+Run `push-stack.sh` (step 4) before the first CI deploy: the restricted key can only run the root-owned `ci-entry.sh`, which `push-stack.sh` installs. Test a restriction change with a throwaway key, and pass its `-i` file as a bash array: too many failed logins get your own IP banned by fail2ban for about ten minutes (`sudo fail2ban-client unban --all` from the DigitalOcean console clears it).
 
 Generate the key pair in a folder outside the repo (for example `~/chocotrack-key`). The private key goes into a GitHub secret and nowhere else: paste it, then delete the local file (`rm -P chocotrack-deploy`). Never leave it, or a stray `.pub`, inside the project folder where `git add -A` could pick it up.
 
@@ -95,10 +98,14 @@ If you change the hostname later: update `APP_DOMAIN` and `SHOPIFY_APP_URL` in `
 | Task | Command (on the Droplet, in `/opt/chocotrack`) |
 |---|---|
 | Deploy | automatic on every push to `main` |
-| Roll back | `/usr/local/lib/chocotrack/deploy.sh <older-commit-sha>` (looks the digest up in `releases.log`) |
-| Logs | `docker compose logs -f app` (or `caddy`) |
-| Status | `docker compose ps` |
-| Restart | `docker compose restart app` |
+| Roll back | `sudo -u deploy /usr/local/lib/chocotrack/deploy.sh <older-commit-sha>` (looks the digest up in `releases.log`) |
+| Logs | `sudo docker compose logs -f app` (or `caddy`) |
+| Status | `sudo docker compose ps`; the running image is `IMAGE_REF` in `.env`, its git sha `DEPLOYED_SHA` |
+| Restart | `sudo docker compose restart app` |
+| Change compose, Caddyfile or scripts | merge to `main`, then `deploy/droplet/push-stack.sh <you>@<droplet>` from your laptop |
+| Audit the host | `ssh <you>@<droplet> 'bash -s' < dropaudit.sh` (read-only; repo root) |
+
+The admin account is not in the `docker` group, so it uses `sudo docker`.
 
 ### Backups
 

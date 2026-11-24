@@ -77,6 +77,8 @@ For more information on the Shopify Dev MCP please read [the documentation](http
 
 ## Deployment
 
+ChocoTrack itself is deployed to a DigitalOcean Droplet; see [`../deploy/droplet/README.md`](../deploy/droplet/README.md). The notes below are the Shopify template's generic hosting guidance.
+
 ### Application Storage
 
 This template uses [Prisma](https://www.prisma.io/) to store session data, by default using an [SQLite](https://www.sqlite.org/index.html) database.

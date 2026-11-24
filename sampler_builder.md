@@ -2,11 +2,11 @@
 
 A Shopify app that assembles "sampler kits" from mini chocolate bar inventory, using the Admin GraphQL [`InventoryItem`](https://shopify.dev/docs/api/admin-graphql/latest/objects/InventoryItem) and inventory adjustment APIs.
 
-## Status (2026-11-10)
+## Status (2026-11-24)
 
 **Built and working in the dev store (`creeklakeconfections`):** Assemble, Disassemble, Settings (kits and categories), search with collection filter, printable pick list, finished-box preview with product images, remembered location, kit and collection, and error handling for dropped connections and stale stock. The mockup is frozen.
 
-**Checks:** 277 unit tests (99.8% statements, 100% lines; gate is 80%), typecheck, lint and build clean, an opt-in live test against the dev store, and 17 browser tests (`npm run test:e2e`). CI on GitHub passes on every push to `main` with pinned action versions.
+**Checks:** 547 unit and render tests (99% lines; gate is 80%), typecheck, lint and build clean, an opt-in live test against the dev store, and 17 browser tests (`npm run test:e2e`). CI on GitHub passes on every push to `main` with pinned action versions.
 
 | Phase | State |
 |---|---|
@@ -17,9 +17,10 @@ A Shopify app that assembles "sampler kits" from mini chocolate bar inventory, u
 | 6 Hardening | Done (see below for what stays open) |
 | Feedback round 2 (Settings page, kit categories) | Done |
 | Error and edge-case pass | Done |
-| 7 Deploy | **Live on the Droplet (2026-11-18), installed and working in the dev store.** 512 MB Ubuntu 26.04 Droplet (192.241.157.72), `https://chocotrack.franson.nyc` (was an sslip.io test hostname), automatic deploys from `main` through GitHub Actions. Production Shopify app "ChocoTrack Production" is released (`shopify.app.chocotrack-production.toml`). Left: choose distribution (custom, one store), a real hostname, a larger Droplet, backup cron |
+| 7 Deploy | **Live and hardened (2026-11-24).** `https://chocotrack.franson.nyc` on a 512 MB Ubuntu 26.04 Droplet (192.241.157.72), Let's Encrypt certificate, automatic builds from `main` and a gated deploy by image digest through a restricted SSH key. Production Shopify app "ChocoTrack Production" is released on the real hostname. The store owner tested Inventory, Assemble, Disassemble, Settings and printing on it in the dev store (all good). Left: store-team acceptance testing, custom distribution, a larger Droplet |
+| Security review | **Done 2026-11-23 to 24** (app code, CI/CD, host). Fixes shipped; deferred items are listed under "Security review" below |
 
-**Next, in order:** (1) human testing of Inventory and the Settings changes on the production app in the dev store (checklist in `inventory_tracker.md`); (2) set up **custom distribution** for the real store (Dev Dashboard, the app's Distribution page: enter the store's `.myshopify.com` domain, generate the install link, install as owner or staff who can install apps; the choice is one-way, so confirm the store first); (3) before real staff use: a Droplet with 1 GB or more RAM, and the daily backup cron; (4) optional fake-Shopify browser suite in CI; (5) ask the store team whether the screens feel faster, then discuss deferred features.
+**Next, in order:** (1) **acceptance testing with the store team** on the production app (checklist in `inventory_tracker.md`); (2) after acceptance, set up **custom distribution** for the real store (Dev Dashboard, the app's Distribution page: enter the store's `.myshopify.com` domain, generate the install link, install as owner or staff who can install apps; the choice is one-way, so confirm the store first); (3) before real staff use, a Droplet with 1 GB or more RAM; (4) after acceptance, the deferred security items (second dev store to test cross-shop isolation live) and the held-back dependency upgrades (see "Security review"); (5) optional fake-Shopify browser suite in CI; (6) ask the store team whether the screens feel faster, then discuss deferred features.
 
 ## Decisions
 
@@ -182,12 +183,29 @@ Target: a small DigitalOcean Droplet. Everything is in `deploy/droplet/` with a 
 
 - **Image:** `choco-track/Dockerfile` runs as a non-root user, keeps the SQLite session database on a mounted `/data` volume, runs `prisma migrate deploy` on start, and has a healthcheck on `GET /healthz`. Built and run locally with placeholder Shopify values: migrations applied, health 200, container reported healthy.
 - **Stack:** `docker-compose.yml` (app plus Caddy with automatic HTTPS), `Caddyfile`, `.env.example`. Compose and Caddy configs validated.
-- **Server scripts:** `bootstrap.sh` (Docker, firewall, fail2ban, unattended upgrades, swap, `deploy` user), `deploy.sh` (pull, restart, wait for healthy; also rolls back by tag), `backup.sh` (daily SQLite backup, 14 days).
-- **CI/CD:** `.github/workflows/ci.yml` runs typecheck, lint, tests with the coverage gate and build for the app, then on `main` builds and pushes `ghcr.io/tigfox/chocotrack:<sha>` and deploys over SSH (skipped until the Droplet secrets exist).
+- **Server scripts:** `bootstrap.sh` (admin account with a key, key-only SSH with no root login, Docker, firewall, fail2ban, unattended upgrades including Docker packages with a 04:00 reboot when needed, swap, the `deploy` user, a block on the cloud metadata address), `deploy.sh` (pull by digest, restart, wait for healthy, record in `releases.log`, roll back if unhealthy or by sha), `ci-entry.sh` (the CI key's forced command), `backup.sh` (daily SQLite backup from root's cron, mode 600, 14 days), and `push-stack.sh` (installs stack changes from an admin's laptop). The scripts live root-owned in `/usr/local/lib/chocotrack`.
+- **CI/CD:** `.github/workflows/ci.yml` runs typecheck, lint, tests with the coverage gate and build, then on `main` builds `ghcr.io/tigfox/chocotrack:<sha>` and, after the `production` environment's reviewer approves, runs `deploy <sha> <digest>` over a key that can do nothing else. CI no longer copies files to the host. `main` has a ruleset (pull request and code-owner review, no force push or deletion; the owner keeps the admin bypass), `.github/CODEOWNERS`, SHA-pinned actions, Dependabot (npm, docker, docker-compose, actions) and secret scanning with push protection.
+- **Containers:** the app and Caddy run read-only with all capabilities dropped (Caddy keeps only `NET_BIND_SERVICE`), `no-new-privileges` and a PID limit; `/app` is root-owned; the app, Caddy and the Node base image are pinned by digest; Caddy has `admin off`, extra headers and returns 401 for `/webhooks/*` without a Shopify signature header.
 - **Database decision:** SQLite on the Droplet for now. It holds only OAuth sessions, so a separate PostgreSQL server would only use memory on a small VM. Moving to a platform without a persistent disk means switching the Prisma datasource to PostgreSQL; sessions are disposable, so no data migration.
-- **Done 2026-11-17 to 18:** bootstrap on Ubuntu 26.04.1 (Docker's apt repo supports the codename), image pulled anonymously from the public ghcr package, healthy app and a Let's Encrypt certificate for `192-241-157-72.sslip.io`, deploy key and the four secrets in the GitHub `production` environment (the deploy job runs in that environment, so repository-level secrets are not used), a CI deploy that passed end to end, the production Shopify app created with "Create app manually", its config completed (scopes, webhooks, `/auth/callback`, API `2026-07`) and released, real credentials in the server's `.env`, and the app installed and working in the dev store.
-- **Lessons:** keep `/opt/chocotrack/data` owned by uid 1000 (a recursive chown to `deploy` stops the app); the CLI names the config after the app (`chocotrack-production`, not `production`); the linked config starts with empty scopes and no webhooks; the app's sign-in path is `/auth/callback`.
-- **Left to do:** custom distribution for the live store; a real domain; Droplet size (512 MB used about 190 MB of swap while idle); the backup cron; password SSH login for root should be turned off now that keys work (the root password was shared in chat, so change it either way).
+- **Done 2026-11-17 to 18:** bootstrap on Ubuntu 26.04.1 (Docker's apt repo supports the codename), image pulled anonymously from the public ghcr package (linked to this repo; only this repo has access), deploy key and the four secrets in the GitHub `production` environment (the deploy job runs in that environment, so repository-level secrets are not used), the production Shopify app created with "Create app manually", its config completed (scopes, webhooks, `/auth/callback`, API `2026-07`) and released, real credentials in the server's `.env`, and the app installed and working in the dev store.
+- **Done 2026-11-23 to 24:** the real hostname `chocotrack.franson.nyc` (Caddy re-issued the certificate; the Shopify config was released with the new URLs, so the sslip.io redirect is gone), the blank public index page, the security review and its fixes (below), React 19 and the Node 26 base image, and the owner's test pass of every screen and printing on the hardened stack.
+- **Lessons:** keep `/opt/chocotrack/data` owned by uid 1000 (a recursive chown to `deploy` stops the app; on this Droplet uid 1000 is the `ubuntu` account); the CLI names the config after the app (`chocotrack-production`, not `production`); the linked config starts with empty scopes and no webhooks; the app's sign-in path is `/auth/callback`; `docker compose exec` swallows a script piped over SSH unless it gets `</dev/null`; failed SSH logins from your own IP trigger fail2ban (about ten minutes); app routes answer 410 to requests without a Shopify session token, which is normal.
+- **Left to do:** custom distribution for the live store (after acceptance testing); a Droplet with 1 GB or more RAM (512 MB used about 190 MB of swap while idle); rotate the root password if it is still the one shared in chat (root login is now off, so it is housekeeping).
+
+### Security review (2026-11-23 to 24)
+
+Three read-only reviews (app code, CI/CD and secrets, the live host through `dropaudit.sh`) plus light active tests against the live host (forged webhooks, unauthenticated API calls, hostile `?shop=` values, TLS and header checks). Nothing critical or high in the app; the weaknesses were in delivery and hosting.
+
+**Fixed:** root and password SSH login (was enabled, with no admin key installed); a world-readable session database and backups that never ran; app container could reach the cloud metadata endpoint; writable `/app` and no container hardening; unrestricted CI key that was root-equivalent through the docker group; images pulled by mutable tag; the template login form on the public home page; unvalidated `scopes_update` webhook payload; stale redirect URLs on a third-party hostname; docs that claimed hardening that was not there.
+
+**Deliberately deferred (decided 2026-11-24, revisit after store-team acceptance testing):**
+- Test cross-shop isolation live; this needs a second dev store, so it is only reviewed in code today.
+- Held-back dependency majors, with `dependabot.yml` told to skip them: Prisma 7 (`@shopify/shopify-app-session-storage-prisma` 11.0.4 peers on Prisma 6), React Router 8 (`@shopify/shopify-app-react-router` peers on 7), ESLint 10 (needs a flat-config migration and a newer typescript-eslint). `npm audit` reports 7 findings in Prisma's CLI chain and build tooling, none reachable from a request.
+- The owner keeps the admin bypass on the `main` ruleset (sole maintainer, so no second reviewer); the `production` environment reviewer is the human gate and may approve their own deploys.
+- Low items from the app review: derive the draft-transfer idempotency key server-side (two clicks with different keys can create duplicate drafts), optional webhook replay de-duplication, restrict `runId` and the transfer key to a safe character set.
+- Not done: image signing with cosign (needs cosign on the host; the digest pin covers a swapped tag), a rootless Docker or sudo-rule deploy user, and the `ubuntu` account (still holds uid 1000, so the container user owns `data/` as "ubuntu").
+
+Re-run `dropaudit.sh` after any host change and compare with the last result.
 
 ### Later
 
