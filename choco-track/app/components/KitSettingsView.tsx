@@ -4,6 +4,7 @@ import type { Workspace } from "../shopify/workspace";
 import { CreateKitModal } from "./CreateKitModal";
 import { CollapsibleSection } from "./CollapsibleSection";
 import { KitSettingsCard } from "./KitSettingsCard";
+import { LinkKitModal } from "./LinkKitModal";
 import type { Multiples } from "../domain/multiples";
 import { MultiplesCard } from "./MultiplesCard";
 import { SourceLocationsCard } from "./SourceLocationsCard";
@@ -16,11 +17,16 @@ interface Props {
 
 export function KitSettingsView({ workspace, sourceIds, multiples }: Props) {
   const [creating, setCreating] = useState(false);
-  const { busy, response, submit } = useSettingsAction();
+  const [linking, setLinking] = useState(false);
+  const { busy, response, submit, reset } = useSettingsAction();
   const closeModal = useCallback(() => setCreating(false), []);
+  const closeLink = useCallback(() => setLinking(false), []);
 
   useEffect(() => {
-    if (response?.ok) setCreating(false);
+    if (response?.ok) {
+      setCreating(false);
+      setLinking(false);
+    }
   }, [response]);
 
   return (
@@ -31,21 +37,41 @@ export function KitSettingsView({ workspace, sourceIds, multiples }: Props) {
           <s-stack gap="base">
             {workspace.kits.length === 0 && (
               <s-banner tone="warning" heading="No kits yet">
-                Create a kit to get started. A kit is an ordinary product with tracked inventory.
+                Use a product the store already sells as a kit, or create a new one. A kit is an ordinary product with tracked inventory.
               </s-banner>
             )}
             {workspace.kits.map((kit) => (
               <KitSettingsCard key={kit.id} kit={kit} collections={workspace.collections} />
             ))}
-            <div>
-              <s-button variant="primary" onClick={() => setCreating(true)}>
+            <s-stack direction="inline" gap="base">
+              <s-button variant="primary" onClick={() => {
+                  reset();
+                  setLinking(true);
+                }}>
+                Use an existing product as a kit
+              </s-button>
+              <s-button
+                onClick={() => {
+                  reset();
+                  setCreating(true);
+                }}
+              >
                 Create a new kit
               </s-button>
-            </div>
+            </s-stack>
           </s-stack>
         </CollapsibleSection>
         <SourceLocationsCard locations={workspace.locations} sourceIds={sourceIds} />
         <MultiplesCard multiples={multiples} />
+        <LinkKitModal
+          open={linking}
+          existing={workspace.kits}
+          collections={workspace.collections}
+          busy={busy}
+          error={response && !response.ok ? response.message : undefined}
+          onClose={closeLink}
+          onLink={(link) => void submit({ intent: "link", ...link })}
+        />
         <CreateKitModal
           open={creating}
           existing={workspace.kits}

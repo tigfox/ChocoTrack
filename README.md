@@ -22,30 +22,28 @@ npm install
 shopify app dev        # interactive: choose the dev store, opens the embedded app
 ```
 
-Screens: **Inventory** (`/app/inventory`, the home page), **Assemble** (`/app/assemble`), **Disassemble** (`/app/disassemble`) and **Settings** (`/app/settings`: kits, categories and transfer source locations). Products are flagged for the Inventory report with the `choco_track.tracked` product metafield and given targets in the `choco_track.targets` variant metafield (both are set from the app). A kit is a product tagged `choco-track-kit` with an integer metafield `choco_track.kit_size` (the app's "Create a new kit" does this for you).
+Screens: **Inventory** (`/app/inventory`, the home page), **Assemble** (`/app/assemble`), **Disassemble** (`/app/disassemble`) and **Settings** (`/app/settings`: kits, categories and transfer source locations). Products are flagged for the Inventory report with the `choco_track.tracked` product metafield and given targets in the `choco_track.targets` variant metafield (both are set from the app). A kit is a variant whose product is tagged `choco-track-kit` and which has an integer metafield `choco_track.kit_size` (and optionally `choco_track.category`, a collection). Settings can mark an existing product as a kit (its inventory must be tracked) or create a new one. Mini bar flavors are variants of their category product (`Mini Bars - Rare`); a variant's `choco_track.display_name` metafield is the name shown in the app.
 
-## Seed a development store
+## Rebuild a development store from the River Sea export
 
-Sample mini bars, kits and collections (made-up stock; dev stores only):
-
-```bash
-shopify store auth --store <store>.myshopify.com --scopes read_products,write_products,read_inventory,write_inventory,read_locations,read_inventory_transfers,write_inventory_transfers
-node scripts/seed-dev-store.mjs <store>.myshopify.com
-```
-
-It expects locations named Warehouse, Market Store and Cafe, and skips SKUs that already exist.
-
-Optionally add the name-only product pictures (so the box preview and printed pick list show images):
+`scripts/import-river-sea.mjs` replaces every product in a **development store** with a Shopify product export, applies the SKUs from `Mini SKUs.csv`, sets starting stock from an inventory export (minis 1500 at the Factory; 60g bars and other tracked variants without real counts get made-up stock), and creates the `Mini bars` and per-category collections. It refuses to run against a store that is not a partner development store, validates everything before writing, and only deletes with `--apply`.
 
 ```bash
-node scripts/upload-dev-images.mjs <store>.myshopify.com   # skips products that already have media
+shopify store auth --store <store>.myshopify.com --scopes read_products,write_products,read_inventory,write_inventory,read_locations,read_publications,write_publications
+npx esbuild scripts/import-river-sea.mjs --bundle --platform=node --format=esm --outfile=/tmp/import-river-sea.mjs
+node /tmp/import-river-sea.mjs <store>.myshopify.com products_export_1.csv "Mini SKUs.csv" inventory_export_1.csv            # dry run
+node /tmp/import-river-sea.mjs <store>.myshopify.com products_export_1.csv "Mini SKUs.csv" inventory_export_1.csv --probe    # create and remove one throwaway product
+node /tmp/import-river-sea.mjs <store>.myshopify.com products_export_1.csv "Mini SKUs.csv" inventory_export_1.csv --apply --confirm=<store>.myshopify.com --kits   # asks you to repeat the domain before deleting every product
+node /tmp/import-river-sea.mjs <store>.myshopify.com products_export_1.csv "Mini SKUs.csv" inventory_export_1.csv --finish --kits  # only collections, flavor names, published flags, kits
 ```
+
+It expects locations named Warehouse, Factory, Market Store and Cafe (the live store's Myterra Warehouse, Reston, Union Market and Chantilly). Save a snapshot of the store before `--apply`. The export's `Published` column is applied to the Online Store channel (needs the `read_publications`/`write_publications` scopes above; without them that step is skipped with a warning).
 
 ## Checks
 
 ```bash
 npm run typecheck && npm run lint && npm run build
-npm run test:coverage                                # unit and render tests, 80% gate (547 tests, 99% lines)
+npm run test:coverage                                # unit and render tests, 80% gate (658 tests, 99% lines)
 LIVE_STORE=<store>.myshopify.com npm run test:live  # real queries + an assemble/disassemble round trip (net zero)
 ```
 

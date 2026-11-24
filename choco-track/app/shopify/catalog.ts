@@ -1,11 +1,15 @@
 import { parseKitSize } from '../domain/kitSize';
+import { humanizeFlavor, isFlavorSlug } from '../lib/flavorName';
 import type { Collection, StockMap, Variant } from '../domain/types';
 import type { GraphqlClient } from './client';
 
-/** Namespace/key of the product metafield that marks a product as a sampler kit and holds its size. */
+/** Namespace/key of the VARIANT metafield that marks a variant as a sampler kit and holds its size. */
 export const KIT_SIZE_METAFIELD = { namespace: 'choco_track', key: 'kit_size' } as const;
 
-/** Optional kit setting: the collection (category) the mix picker starts on. */
+/** Optional variant metafield: the name to show for a flavor (set by the importer; staff can edit it in Shopify). */
+export const DISPLAY_NAME_METAFIELD = { namespace: 'choco_track', key: 'display_name' } as const;
+
+/** Optional kit setting on the variant: the collection (category) the mix picker starts on. */
 export const CATEGORY_METAFIELD = { namespace: 'choco_track', key: 'category' } as const;
 
 
@@ -13,6 +17,11 @@ export const CATEGORY_METAFIELD = { namespace: 'choco_track', key: 'category' } 
 export interface CatalogVariant extends Variant {
   readonly inventoryItemId: string;
 }
+
+/** The kit settings, read from the variant (a product such as "Mini Bars (Assorted)" can hold kits of different sizes). */
+export const KIT_VARIANT_FIELDS = `
+  kitSize: metafield(namespace: "${KIT_SIZE_METAFIELD.namespace}", key: "${KIT_SIZE_METAFIELD.key}") { value }
+  category: metafield(namespace: "${CATEGORY_METAFIELD.namespace}", key: "${CATEGORY_METAFIELD.key}") { value }`;
 
 /** Stock rides along with every variant read, so no second round trip is needed. */
 const INVENTORY_ITEM = `inventoryItem {
@@ -26,13 +35,13 @@ const VARIANT_FIELDS = `
   sku
   barcode
   image { url }
+  displayName: metafield(namespace: "${DISPLAY_NAME_METAFIELD.namespace}", key: "${DISPLAY_NAME_METAFIELD.key}") { value }
+  ${KIT_VARIANT_FIELDS}
   ${INVENTORY_ITEM}
   product {
     title
     featuredMedia { preview { image { url } } }
     collections(first: 25) { nodes { id } }
-    kitSize: metafield(namespace: "${KIT_SIZE_METAFIELD.namespace}", key: "${KIT_SIZE_METAFIELD.key}") { value }
-    category: metafield(namespace: "${CATEGORY_METAFIELD.namespace}", key: "${CATEGORY_METAFIELD.key}") { value }
   }
 `;
 
@@ -58,6 +67,10 @@ export interface VariantNode {
   readonly sku: string | null;
   readonly barcode: string | null;
   readonly image: { readonly url: string } | null;
+  /** Kit settings from the variant's metafields; absent or null for an ordinary variant. */
+  readonly displayName?: { readonly value: string } | null;
+  readonly kitSize?: { readonly value: string } | null;
+  readonly category?: { readonly value: string } | null;
   readonly inventoryItem: {
     readonly id: string;
     /** Absent when the node was fetched without stock (for example right after creating a kit). */
@@ -72,8 +85,6 @@ export interface VariantNode {
     readonly title: string;
     readonly featuredMedia: { readonly preview: { readonly image: { readonly url: string } | null } | null } | null;
     readonly collections: { readonly nodes: ReadonlyArray<{ readonly id: string }> };
-    readonly kitSize: { readonly value: string } | null;
-    readonly category?: { readonly value: string } | null;
   };
 }
 
@@ -97,17 +108,29 @@ const toResult = (nodes: readonly VariantNode[]): CatalogResult => ({
 
 const DEFAULT_VARIANT_TITLE = 'Default Title';
 
+/** Category products are titled "Mini Bars - Rare"; their variants are the flavors. */
+const CATEGORY_PRODUCT_PREFIX = /^Mini Bars - /i;
+
+/** The category product's title without the shared prefix ("Mini Bars - Rare" becomes "Rare"). */
+const groupLabel = (productTitle: string): string => productTitle.replace(CATEGORY_PRODUCT_PREFIX, '');
+
 export const toCatalogVariant = (node: VariantNode): CatalogVariant => {
   const imageUrl = node.image?.url ?? node.product.featuredMedia?.preview?.image?.url;
-  const kitSize = parseKitSize(node.product.kitSize?.value);
-  const categoryId = node.product.category?.value;
+  const kitSize = parseKitSize(node.kitSize?.value);
+  const categoryId = node.category?.value;
+  const isDefault = node.title === DEFAULT_VARIANT_TITLE;
+  // A flavor: the display name, else (for a category product only) the humanized slug. Anything else keeps "Product - Variant",
+  // so a variant named "12" or "6-pack" on an ordinary product is not renamed.
+  const isCategoryFlavor = !isDefault && CATEGORY_PRODUCT_PREFIX.test(node.product.title) && isFlavorSlug(node.title);
+  const flavor = node.displayName?.value || (isCategoryFlavor ? humanizeFlavor(node.title) : undefined);
   return {
     id: node.id,
     inventoryItemId: node.inventoryItem.id,
-    title: node.title === DEFAULT_VARIANT_TITLE ? node.product.title : `${node.product.title} - ${node.title}`,
+    title: flavor ?? (isDefault ? node.product.title : `${node.product.title} - ${node.title}`),
     sku: node.sku ?? '',
     barcode: node.barcode ?? '',
     collectionIds: node.product.collections.nodes.map((c) => c.id),
+    ...(flavor && !isDefault ? { group: groupLabel(node.product.title) } : {}),
     ...(imageUrl ? { imageUrl } : {}),
     ...(kitSize ? { kitSize } : {}),
     ...(categoryId ? { categoryId } : {}),
@@ -156,6 +179,9 @@ export const searchVariants = async (
 /** Tag on every kit product; the kit-size metafield holds the size. */
 export const KIT_TAG = 'choco-track-kit';
 
+/** Kept at 10: the query also reads stock levels per variant, and 50 variants would exceed Shopify's query cost limit. */
+const KIT_VARIANTS_PER_PRODUCT = 10;
+
 const KITS_QUERY = `#graphql
   query Kits {
     products(first: 50, query: "tag:${KIT_TAG}") {
@@ -163,10 +189,8 @@ const KITS_QUERY = `#graphql
         title
         featuredMedia { preview { image { url } } }
         collections(first: 25) { nodes { id } }
-        kitSize: metafield(namespace: "${KIT_SIZE_METAFIELD.namespace}", key: "${KIT_SIZE_METAFIELD.key}") { value }
-        category: metafield(namespace: "${CATEGORY_METAFIELD.namespace}", key: "${CATEGORY_METAFIELD.key}") { value }
-        variants(first: 10) {
-          nodes { id title sku barcode image { url } ${INVENTORY_ITEM} }
+        variants(first: ${KIT_VARIANTS_PER_PRODUCT}) {
+          nodes { id title sku barcode image { url } ${KIT_VARIANT_FIELDS} ${INVENTORY_ITEM} }
         }
       }
     }

@@ -12,7 +12,6 @@ const node = (over: Partial<VariantNode> = {}, product: Partial<VariantNode['pro
     title: 'Mini - Rum Caramel',
     featuredMedia: null,
     collections: { nodes: [{ id: 'c1' }] },
-    kitSize: null,
     ...product,
   },
   ...over,
@@ -32,6 +31,30 @@ describe('toCatalogVariant', () => {
   it('appends the variant title for multi-variant products', () => {
     expect(toCatalogVariant(node({ title: 'Large' })).title).toBe('Mini - Rum Caramel - Large');
   });
+  describe('flavor names for variants of a category product', () => {
+    const mini = (over: Partial<VariantNode>) => node({ title: 'rosemary-olive-oil', ...over }, { title: 'Mini Bars - Limited Editions' });
+    it('shows the display name metafield, with the category as the group', () => {
+      const v = toCatalogVariant(mini({ displayName: { value: 'Rosemary & Olive Oil' } }));
+      expect([v.title, v.group]).toEqual(['Rosemary & Olive Oil', 'Limited Editions']);
+    });
+    it('humanizes a hyphenated variant title when there is no metafield', () => {
+      const v = toCatalogVariant(mini({}));
+      expect([v.title, v.group]).toEqual(['Rosemary Olive Oil', 'Limited Editions']);
+    });
+    it('keeps the product-and-variant title for ordinary variants and sets no group', () => {
+      const v = toCatalogVariant(node({ title: '60g Bar' }, { title: 'Desert Flower' }));
+      expect([v.title, v.group]).toEqual(['Desert Flower - 60g Bar', undefined]);
+      expect(toCatalogVariant(node()).group).toBeUndefined();
+    });
+    it('uses the product title as the group for a staff-named variant of another product', () => {
+      const v = toCatalogVariant(node({ title: 'desert-flower', displayName: { value: 'Desert Flower' } }, { title: 'Flavors' }));
+      expect([v.title, v.group]).toEqual(['Desert Flower', 'Flavors']);
+    });
+    it.each(['12', 'small', '6-pack', 'gift-box'])('does not rename a "%s" variant of an ordinary product', (title) => {
+      const v = toCatalogVariant(node({ title }, { title: 'Mini Sampler Box' }));
+      expect([v.title, v.group]).toEqual([`Mini Sampler Box - ${title}`, undefined]);
+    });
+  });
   it('prefers the variant image, then the product image', () => {
     const featured = { preview: { image: { url: 'p.png' } } };
     expect(toCatalogVariant(node({ image: { url: 'v.png' } }, { featuredMedia: featured })).imageUrl).toBe('v.png');
@@ -43,15 +66,23 @@ describe('toCatalogVariant', () => {
     expect([v.sku, v.barcode]).toEqual(['', '']);
   });
   it('reads the kit category (a collection id) when set', () => {
-    expect(toCatalogVariant(node({}, { category: { value: 'gid://shopify/Collection/5' } })).categoryId).toBe('gid://shopify/Collection/5');
-    expect(toCatalogVariant(node({}, { category: null })).categoryId).toBeUndefined();
+    expect(toCatalogVariant(node({ category: { value: 'gid://shopify/Collection/5' } })).categoryId).toBe('gid://shopify/Collection/5');
+    expect(toCatalogVariant(node({ category: null })).categoryId).toBeUndefined();
     expect(toCatalogVariant(node()).categoryId).toBeUndefined();
   });
   it('reads the kit size only when valid', () => {
-    expect(toCatalogVariant(node({}, { kitSize: { value: '5' } })).kitSize).toBe(5);
-    expect(toCatalogVariant(node({}, { kitSize: { value: '7' } })).kitSize).toBe(7);
-    expect(toCatalogVariant(node({}, { kitSize: { value: '49' } })).kitSize).toBeUndefined();
-    expect(toCatalogVariant(node({}, { kitSize: { value: 'x' } })).kitSize).toBeUndefined();
+    expect(toCatalogVariant(node({ kitSize: { value: '5' } })).kitSize).toBe(5);
+    expect(toCatalogVariant(node({ kitSize: { value: '7' } })).kitSize).toBe(7);
+    expect(toCatalogVariant(node({ kitSize: { value: '49' } })).kitSize).toBeUndefined();
+    expect(toCatalogVariant(node({ kitSize: { value: 'x' } })).kitSize).toBeUndefined();
+  });
+});
+
+describe('variant search query', () => {
+  it('asks for the display name metafield', async () => {
+    const client = fakeClient({ productVariants: { nodes: [] } });
+    await searchVariants(client);
+    expect(client.calls[0]?.query).toContain('displayName: metafield(namespace: "choco_track", key: "display_name")');
   });
 });
 
@@ -114,13 +145,18 @@ describe('stock extraction', () => {
 });
 
 describe('listKits', () => {
+  const kitVariant = (id: string, sku: string, size: string | null, title = 'Default Title') => {
+    const full = node({ id, sku, title, kitSize: size === null ? null : { value: size } });
+    return Object.fromEntries(Object.entries(full).filter(([key]) => key !== 'product'));
+  };
+  const { product: p } = node();
+
   it('returns only variants with a valid kit size', async () => {
-    const { product: p, ...variant } = node({ id: 'k', title: 'Default Title', sku: 'SMP-6' });
     const client = fakeClient({
       products: {
         nodes: [
-          { ...p, title: 'Sampler Kit - 6 Pack', kitSize: { value: '6' }, variants: { nodes: [variant] } },
-          { ...p, title: 'Not a kit', kitSize: null, variants: { nodes: [variant] } },
+          { ...p, title: 'Sampler Kit - 6 Pack', variants: { nodes: [kitVariant('k', 'SMP-6', '6')] } },
+          { ...p, title: 'Not a kit', variants: { nodes: [kitVariant('n', 'NOPE', null)] } },
         ],
       },
     });
@@ -128,6 +164,32 @@ describe('listKits', () => {
     expect(kits.map((k) => [k.sku, k.kitSize, k.title])).toEqual([['SMP-6', 6, 'Sampler Kit - 6 Pack']]);
     expect(stock).toEqual({ k: { L1: 7 } });
     expect(client.calls[0]?.query).toContain('inventoryLevels');
+  });
+  it('gives each variant of one product its own size, skipping variants that are not kits', async () => {
+    const client = fakeClient({
+      products: {
+        nodes: [
+          {
+            ...p,
+            title: 'Mini Bars (Assorted)',
+            variants: {
+              nodes: [kitVariant('a', 'A', '4', 'Mix'), kitVariant('b', 'B', '12', 'Dozen'), kitVariant('c', 'C', null, 'Single')],
+            },
+          },
+        ],
+      },
+    });
+    const { variants: kits } = await listKits(client);
+    expect(kits.map((k) => [k.sku, k.kitSize, k.title])).toEqual([
+      ['A', 4, 'Mini Bars (Assorted) - Mix'],
+      ['B', 12, 'Mini Bars (Assorted) - Dozen'],
+    ]);
+  });
+  it('asks for the size and category on the variant, not the product', async () => {
+    const client = fakeClient({ products: { nodes: [] } });
+    await listKits(client);
+    const query = client.calls[0]?.query ?? '';
+    expect(query).toMatch(/variants\(first: \d+\) \{[\s\S]*kitSize: metafield/);
   });
 });
 

@@ -17,7 +17,14 @@ const store = process.env.LIVE_STORE;
 const cliClient: GraphqlClient = async <T>(query: string, variables?: Readonly<Record<string, unknown>>) => {
   const args = ['store', 'execute', '--store', store as string, '--json', '--allow-mutations', '--query', query];
   if (variables) args.push('--variables', JSON.stringify(variables));
-  const out = execFileSync('shopify', args, { encoding: 'utf8', env: { ...process.env, OPT_OUT_INSTRUMENTATION: 'true' } });
+  let out: string;
+  try {
+    out = execFileSync('shopify', args, { encoding: 'utf8', env: { ...process.env, OPT_OUT_INSTRUMENTATION: 'true' } });
+  } catch (err) {
+    // The CLI exits non-zero on GraphQL errors such as "access denied"; surface its message like the Admin API client does.
+    const stdout = String((err as { stdout?: unknown }).stdout ?? '');
+    throw new ShopifyApiError(stdout.includes('"message"') ? stdout : String(err));
+  }
   const body = JSON.parse(out.slice(out.indexOf('{\n')));
   if (body.errors) throw new ShopifyApiError(JSON.stringify(body.errors));
   return body.data as T;
@@ -32,23 +39,30 @@ describe.skipIf(!store)('live dev store', () => {
       searchVariants(cliClient, { text: 'caramel' }),
     ]);
     const kitList = kits.variants;
-    expect(locations.map((l) => l.name)).toEqual(expect.arrayContaining(['Warehouse', 'Market Store']));
-    expect(collections.map((c) => c.title)).toContain('Mini bars (not sold individually)');
-    expect(kitList.map((k) => [k.sku, k.kitSize])).toEqual(expect.arrayContaining([['SMP-12', 12], ['SMP-4', 4], ['SMP-5', 5], ['SMP-6', 6]]));
-    expect(minis.variants.map((m) => m.sku)).toContain('MINI-RUM-CARAMEL');
-    // Product images come through for the box preview and the pick list (seed with scripts/upload-dev-images.mjs).
-    expect(minis.variants.every((m) => m.imageUrl?.startsWith('https://cdn.shopify.com/'))).toBe(true);
+    expect(locations.map((l) => l.name)).toEqual(expect.arrayContaining(['Warehouse', 'Factory', 'Market Store', 'Cafe']));
+    expect(collections.map((c) => c.title)).toEqual(expect.arrayContaining(['Mini bars', 'Limited Editions', 'Dark Milks', 'Rare', 'Single Origin', 'Dark', 'Milk']));
+    // Kits are marked by the importer (--kits): the 12-bar sampler box and the 6-bar single-origin box.
+    expect(kitList.map((k) => [k.sku, k.kitSize])).toEqual(expect.arrayContaining([['BAR-SAM-DML', 12]]));
+    expect(kitList.map((k) => k.kitSize)).toContain(6);
+    // A mini flavor is a variant of its category product, shown by its display name with the category under it.
+    const rum = minis.variants.find((m) => m.sku === 'MIN-RCL-DMK');
+    expect(rum).toMatchObject({ title: 'Rum Caramel', group: 'Dark Milks' });
+    const peach = (await searchVariants(cliClient, { text: 'MIN-PCH-DMK' })).variants[0];
+    expect(peach?.title).toBe('Peach IPA');
+    // Product images come through for the box preview and the pick list.
+    expect(rum?.imageUrl?.startsWith('https://cdn.shopify.com/')).toBe(true);
   }, 60_000);
 
-  it('assembles then disassembles one 4-pack, restoring stock', async () => {
+  it('assembles then disassembles one 12-bar sampler box, restoring stock', async () => {
     const [locations, kits, minis] = await Promise.all([
       listLocations(cliClient),
       listKits(cliClient),
-      searchVariants(cliClient, { text: 'MINI-', first: 4 }),
+      searchVariants(cliClient, { text: 'MIN-', first: 12 }),
     ]);
     const kitList = kits.variants;
-    const warehouse = locations.find((l) => l.name === 'Warehouse');
-    const kit = kitList.find((k) => k.sku === 'SMP-4');
+    // The minis are stocked at the Factory (the importer puts 1500 of each there).
+    const warehouse = locations.find((l) => l.name === 'Factory');
+    const kit = kitList.find((k) => k.sku === 'BAR-SAM-DML');
     if (!warehouse || !kit) throw new Error('seed data missing');
     const perKit = Object.fromEntries(minis.variants.map((m) => [m.id, 1]));
     const ids = [kit, ...minis.variants].map((v) => v.id);
@@ -79,8 +93,8 @@ describe.skipIf(!store)('live dev store', () => {
   // Regression: a brand-new kit has no inventory level at the chosen location, so assembling must activate it
   // (API 2026-07 requires an idempotency key on inventoryActivate).
   it('assembles and disassembles a brand-new kit, then deletes it', async () => {
-    const [locations, minis] = await Promise.all([listLocations(cliClient), searchVariants(cliClient, { text: 'MINI-', first: 4 })]);
-    const warehouse = locations.find((l) => l.name === 'Warehouse');
+    const [locations, minis] = await Promise.all([listLocations(cliClient), searchVariants(cliClient, { text: 'MIN-', first: 4 })]);
+    const warehouse = locations.find((l) => l.name === 'Factory');
     if (!warehouse) throw new Error('seed data missing');
     const sku = `LIVE-TEST-${Date.now()}`;
     const kit = await createKit(cliClient, { title: `Live test ${sku}`, size: 4, sku });

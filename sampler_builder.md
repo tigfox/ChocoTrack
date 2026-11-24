@@ -6,7 +6,7 @@ A Shopify app that assembles "sampler kits" from mini chocolate bar inventory, u
 
 **Built and working in the dev store (`creeklakeconfections`):** Assemble, Disassemble, Settings (kits and categories), search with collection filter, printable pick list, finished-box preview with product images, remembered location, kit and collection, and error handling for dropped connections and stale stock. The mockup is frozen.
 
-**Checks:** 547 unit and render tests (99% lines; gate is 80%), typecheck, lint and build clean, an opt-in live test against the dev store, and 17 browser tests (`npm run test:e2e`). CI on GitHub passes on every push to `main` with pinned action versions.
+**Checks:** 658 unit and render tests (99% lines; gate is 80%), typecheck, lint and build clean, an opt-in live test against the dev store, and 17 browser tests (`npm run test:e2e`). CI on GitHub passes on every push to `main` with pinned action versions.
 
 | Phase | State |
 |---|---|
@@ -30,7 +30,7 @@ A Shopify app that assembles "sampler kits" from mini chocolate bar inventory, u
 | Kit sizes | Each kit has its own size, **any whole number from 1 to 48** (typed on the Settings page; it was a fixed list of 4, 5, 6 and 12 before 2026-11-17). Mini bars per kit must equal the kit size exactly. |
 | Components | About 20 flavors of mini chocolate bar (the mockup uses 23 names taken from the River Sea Chocolates bar collection). Tracked in inventory, not sold individually. Any combination may go in a kit. |
 | Recipe | None stored. Components and quantities are chosen at each assembly run (the same mix is built N times per run). |
-| Kit SKU | An ordinary tracked variant. The app can create it or link an existing variant. |
+| Kit SKU | An ordinary tracked variant. The app can create it, or link an existing variant (Settings, "Use an existing product as a kit"). The kit size and category are variant metafields, so one product can hold kits of different sizes. |
 | Disassembly | The mini bars in one kit are entered manually (they must equal the kit size); returned stock is that mix x the number of kits. |
 | Locations | Multi-location. Every run happens at a chosen location. |
 | Component picker | Search by title, SKU or barcode (scanner-style Enter to add), with a collection filter (defaults to the mini-bar collection). |
@@ -42,7 +42,7 @@ A Shopify app that assembles "sampler kits" from mini chocolate bar inventory, u
 | Distribution | Built for one store; no hardcoded shop so it can go public later. |
 | Hosting | **Initial: one small DigitalOcean Droplet** (Docker Compose, Caddy for HTTPS, SQLite sessions on disk; runbook in `deploy/droplet/`). May move to a larger platform (AWS, GCP, App Platform) if the app grows; the container stays portable (see Hosting). |
 | Kit settings | A Settings page lists the kits and edits name, size and optional category; it also creates kits. Price, SKU and barcode stay in Shopify. |
-| Kit category | Optional, one per kit, an existing store collection, kept in the `choco_track.category` metafield on the kit product. Assembling or disassembling that kit starts the mini-bar list on it. |
+| Kit category | Optional, one per kit, an existing store collection, kept in the `choco_track.category` metafield on the kit **variant**. Assembling or disassembling that kit starts the mini-bar list on it. With the River Sea data each mini category product has its own collection (`Limited Editions`, `Dark Milks`, `Rare`, ...) |
 | Deferred | Lots and expiry dates, cost rollup, templates, audit/history UI. |
 
 ## Key design points

@@ -9,6 +9,13 @@ describe('parseKitUpdate', () => {
       value: { variantId: 'gid://shopify/ProductVariant/1', title: 'Milk 5', size: 5, categoryId: 'gid://shopify/Collection/3' },
     });
   });
+  it('treats a missing title as "do not rename"', () => {
+    const noTitle = Object.fromEntries(Object.entries(base).filter(([key]) => key !== 'title'));
+    expect(parseKitUpdate(noTitle)).toEqual({
+      ok: true,
+      value: { variantId: 'gid://shopify/ProductVariant/1', size: 5, categoryId: 'gid://shopify/Collection/3' },
+    });
+  });
   it('maps an empty or missing category to none', () => {
     expect(parseKitUpdate({ ...base, categoryId: '' })).toMatchObject({ ok: true, value: { categoryId: null } });
     expect(parseKitUpdate({ ...base, categoryId: undefined })).toMatchObject({ ok: true, value: { categoryId: null } });

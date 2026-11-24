@@ -11,11 +11,15 @@ export const parseKitUpdate = (raw: unknown): ParseUpdateResult => {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return { ok: false, error: 'Invalid request.' };
   const { kitId, title, size, categoryId } = raw as Record<string, unknown>;
   if (!isVariantGid(kitId)) return { ok: false, error: 'Invalid request.' };
-  const cleanTitle = typeof title === 'string' ? title.trim() : '';
-  if (cleanTitle === '' || cleanTitle.length > MAX_TITLE) return { ok: false, error: 'Enter a title.' };
+  // A missing title means "keep the name"; a present one must be a real title.
+  const cleanTitle = title === undefined ? undefined : typeof title === 'string' ? title.trim() : '';
+  if (cleanTitle !== undefined && (cleanTitle === '' || cleanTitle.length > MAX_TITLE)) return { ok: false, error: 'Enter a title.' };
   const sizeProblem = kitSizeError(size);
   if (sizeProblem) return { ok: false, error: sizeProblem };
   const category = parseCategory(categoryId);
   if (!category.ok) return { ok: false, error: CATEGORY_ERROR };
-  return { ok: true, value: { variantId: kitId, title: cleanTitle, size: size as number, categoryId: category.id } };
+  return {
+    ok: true,
+    value: { variantId: kitId, ...(cleanTitle !== undefined ? { title: cleanTitle } : {}), size: size as number, categoryId: category.id },
+  };
 };
