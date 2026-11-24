@@ -3,6 +3,7 @@ import type { Collection } from "../domain/types";
 import { useModal } from "../hooks/useModal";
 import { fromOptionValue, NO_OPTION, toOptionValue } from "../lib/emptyOption";
 import { fetchJson } from "../lib/fetchJson";
+import { MAX_RESULTS, PAGE_SIZE } from "../lib/searchParams";
 import type { InventoryResponse } from "../lib/handleInventory";
 import type { FlagCandidate } from "../shopify/inventoryWrites";
 import { fieldValue } from "../wc";
@@ -24,6 +25,7 @@ export function AddProductsModal({ open, collections, trackedIds, onClose, onFla
   const ref = useModal(open, onClose);
   const [query, setQuery] = useState("");
   const [collectionId, setCollectionId] = useState("");
+  const [limit, setLimit] = useState(PAGE_SIZE);
   const [results, setResults] = useState<readonly FlagCandidate[]>([]);
   const [error, setError] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
@@ -34,6 +36,7 @@ export function AddProductsModal({ open, collections, trackedIds, onClose, onFla
     const params = new URLSearchParams();
     if (query.trim()) params.set("q", query.trim());
     if (collectionId) params.set("collection", collectionId);
+    params.set("limit", String(limit));
     let current = true;
     setLoading(true);
     const timer = setTimeout(async () => {
@@ -51,7 +54,7 @@ export function AddProductsModal({ open, collections, trackedIds, onClose, onFla
       current = false;
       clearTimeout(timer);
     };
-  }, [open, query, collectionId]);
+  }, [open, query, collectionId, limit]);
 
   const toggle = async (product: FlagCandidate, tracked: boolean) => {
     setBusyId(product.id);
@@ -68,8 +71,14 @@ export function AddProductsModal({ open, collections, trackedIds, onClose, onFla
         </s-paragraph>
         {error && <s-banner tone="critical">{error}</s-banner>}
         <s-grid gridTemplateColumns="2fr 1fr" gap="base">
-          <s-search-field label="Search" value={query} placeholder="Product name" onInput={(e) => setQuery(fieldValue(e))} />
-          <s-select label="Collection" value={toOptionValue(collectionId)} onInput={(e) => setCollectionId(fromOptionValue(fieldValue(e)))}>
+          <s-search-field label="Search" value={query} placeholder="Product name" onInput={(e) => {
+              setLimit(PAGE_SIZE);
+              setQuery(fieldValue(e));
+            }} />
+          <s-select label="Collection" value={toOptionValue(collectionId)} onInput={(e) => {
+              setLimit(PAGE_SIZE);
+              setCollectionId(fromOptionValue(fieldValue(e)));
+            }}>
             <s-option value={NO_OPTION}>All products</s-option>
             {collections.map((c) => (
               <s-option key={c.id} value={c.id}>{c.title}</s-option>
@@ -102,6 +111,11 @@ export function AddProductsModal({ open, collections, trackedIds, onClose, onFla
             );
           })}
         </s-stack>
+        {!loading && results.length >= limit && limit < MAX_RESULTS && (
+          <div>
+            <s-button variant="tertiary" onClick={() => setLimit((n) => Math.min(n + PAGE_SIZE, MAX_RESULTS))}>Show more</s-button>
+          </div>
+        )}
       </s-stack>
       <s-button slot="primary-action" variant="primary" onClick={onClose}>Done</s-button>
     </s-modal>
