@@ -174,7 +174,8 @@ export const searchVariants = async (
 /** Tag on every kit product; the kit-size metafield holds the size. */
 export const KIT_TAG = 'choco-track-kit';
 
-const KIT_VARIANTS_PER_PRODUCT = 50;
+/** Kept at 10: the query also reads stock levels per variant, and 50 variants would exceed Shopify's query cost limit. */
+const KIT_VARIANTS_PER_PRODUCT = 10;
 
 const KITS_QUERY = `#graphql
   query Kits {

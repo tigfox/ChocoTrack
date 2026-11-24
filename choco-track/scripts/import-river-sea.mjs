@@ -1,6 +1,6 @@
 // Replaces every product in a DEVELOPMENT store with the River Sea product export, then sets starting stock.
 // Refuses to run against a store that is not a partner development store. Without --apply it only validates and prints a summary.
-// --finish skips the delete and import: it only syncs the collections and flavor names (and, with --kits, marks the kit variants) on the store as it is.
+// --finish skips the delete and import: it only syncs the collections, flavor names and published flags (and, with --kits, marks the kit variants) on the store as it is.
 // Usage: npx esbuild scripts/import-river-sea.mjs --bundle --platform=node --format=esm --outfile=/tmp/import-river-sea.mjs && node /tmp/import-river-sea.mjs <store>.myshopify.com <products_export.csv> <Mini SKUs.csv> <inventory_export.csv> [--apply | --finish] [--kits]
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -80,6 +80,36 @@ async function writeDisplayNamesInStore() {
   }
 }
 
+// Online Store published flags from the export. Needs read_publications/write_publications; without them it says so and carries on.
+async function syncPublished() {
+  let publicationId;
+  try {
+    publicationId = run("{ publications(first: 20) { nodes { id name } } }").publications.nodes.find((p) => /^online\s*store$/i.test(p.name))?.id;
+  } catch (e) {
+    console.warn(`Skipping published flags (re-run shopify store auth with read_publications,write_publications): ${String(e.message).slice(0, 160)}`);
+    return;
+  }
+  if (!publicationId) return console.warn("Skipping published flags: the store has no Online Store channel.");
+  const wanted = new Map(products.map((p) => [p.handle, p.published]));
+  let changed = 0;
+  for (let after = null; ; ) {
+    const d = run("query($after: String, $pub: ID!) { products(first: 50, after: $after) { pageInfo { hasNextPage endCursor } nodes { id handle publishedOnPublication(publicationId: $pub) } } }", { after, pub: publicationId }).products;
+    for (const p of d.nodes) {
+      const should = wanted.get(p.handle);
+      if (should === undefined || should === p.publishedOnPublication) continue;
+      const mutation = should
+        ? "mutation($id: ID!, $i: [PublicationInput!]!) { publishablePublish(id: $id, input: $i) { userErrors { message } } }"
+        : "mutation($id: ID!, $i: [PublicationInput!]!) { publishableUnpublish(id: $id, input: $i) { userErrors { message } } }";
+      const r = run(mutation, { id: p.id, i: [{ publicationId }] }, true);
+      userErrors(`publish ${p.handle}`, (r.publishablePublish ?? r.publishableUnpublish).userErrors);
+      changed++;
+    }
+    if (!d.pageInfo.hasNextPage) break;
+    after = d.pageInfo.endCursor;
+  }
+  console.log(`Published flags synced (${changed} changed).`);
+}
+
 // Kits on an already-imported store: tag each kit product and set the size on the variant.
 async function markKitsInStore() {
   for (const p of products) {
@@ -157,7 +187,8 @@ if (flags.includes("--finish")) {
   await syncCollections();
   await writeDisplayNamesInStore();
   if (markKits) await markKitsInStore();
-  console.log("Finished collections and flavor names" + (markKits ? " and kits." : "."));
+  await syncPublished();
+  console.log("Finished collections, flavor names and published flags" + (markKits ? " and kits." : "."));
   process.exit(0);
 }
 if (!apply) {
@@ -194,6 +225,7 @@ for (const [i, { handle, input }] of inputs.entries()) {
 console.log(`Imported ${inputs.length - failures.length}/${inputs.length}.`);
 
 await syncCollections();
+await syncPublished();
 if (failures.length) {
   console.error(JSON.stringify(failures, null, 2));
   process.exit(2);

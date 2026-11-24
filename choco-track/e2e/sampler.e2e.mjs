@@ -6,7 +6,15 @@ import { chromium } from 'playwright-core';
 
 const CDP = process.env.CDP_URL ?? 'http://127.0.0.1:9222';
 const BASE = `https://admin.shopify.com/store/${process.env.LIVE_STORE_HANDLE ?? 'creeklakeconfections'}/apps/chocotrack/app`;
-const FLAVORS = ['Mini - 100% Cacao', 'Mini - Bolivia 72%'];
+// Mini flavors are variants of the category products; names are the display names the importer writes.
+const FLAVORS = [
+  { name: 'Bolivia 72%', sku: 'MIN-BOL-RAR' },
+  { name: 'Haiti 72%', sku: 'MIN-HAI-ORI' },
+];
+// The importer stocks the minis at the Factory (1500 each) and marks two kits; the 6-bar box is the default kit.
+const STOCK_LOCATION = 'Factory';
+const KIT6 = 'Single-Origin Select Box';
+const KIT12_SKU = 'BAR-SAM-DML';
 
 let browser;
 let page;
@@ -20,12 +28,21 @@ const open = async (path) => {
   for (const selector of ready) await app().waitForSelector(selector, { state: 'attached', timeout: 30_000 });
   // The server-rendered HTML appears before React attaches its handlers; events sent too early are lost.
   await page.waitForTimeout(3_000);
+  if (path === 'assemble' || path === 'disassemble') await chooseLocation(STOCK_LOCATION);
+};
+// The app opens on the first location; the minis are stocked at the Factory.
+const chooseLocation = async (name) => {
+  const select = app().locator('s-select[label="Location"]');
+  const value = await optionValue(select, name);
+  if ((await select.evaluate((el) => el.value)) === value) return;
+  await setValue(select, value);
+  await page.waitForTimeout(1_000);
 };
 const text = () => app().locator('body').innerText();
 const kitSize = async () => Number(/exactly (\d+)/.exec(await text())?.[1]);
-const available = async (name) => Number(new RegExp(`${name.replace(/[%]/g, '.')}\\S* - (\\d+) available`).exec(await text())?.[1]);
-const add = async (name, times) => {
-  for (let i = 0; i < times; i++) await app().locator(`s-button[accessibilitylabel="Add one ${name}"]`).click();
+const available = async (flavor) => Number(/(\d+) available/.exec(await app().locator(`[data-testid="row-${flavor.sku}"]`).innerText())?.[1]);
+const add = async (flavor, times) => {
+  for (let i = 0; i < times; i++) await app().locator(`s-button[accessibilitylabel="Add one ${flavor.name}"]`).click();
 };
 const fillMix = async () => {
   const size = await kitSize();
@@ -52,7 +69,7 @@ after(async () => {
 describe('Assemble screen', () => {
   it('lists mini bars with stock', async () => {
     await open('assemble');
-    assert.match(await text(), /Mini - Bolivia 72%.* available/);
+    assert.match(await text(), /Bolivia 72%[\s\S]*available/);
   });
 
   it('searches by name', async () => {
@@ -113,12 +130,12 @@ describe('Collection filter', () => {
     assert.equal(await app().locator('s-select[label="Collection"]').evaluate((el) => el.value), 'none');
     await open('assemble');
     assert.equal(await app().locator('s-select[label="Collection"]').evaluate((el) => el.value), 'none');
-    await app().locator('s-select[label="Collection"] select').selectOption({ index: 4 });
+    await app().locator('s-select[label="Collection"] select').selectOption({ label: 'Mini bars' });
   });
 });
 
 describe('Kit settings and categories', () => {
-  const card = () => app().locator('s-section[heading*="6 Pack"]').first();
+  const card = () => app().locator(`s-section[heading*="${KIT6}"]`).first();
   const setField = (selector, value) =>
     card().locator(selector).evaluate((el, v) => {
       el.value = v;
@@ -142,7 +159,7 @@ describe('Kit settings and categories', () => {
     await open('assemble');
     const kit = app().locator('s-select[label="Kit"]');
     await kit.evaluate((el) => {
-      el.value = [...el.querySelectorAll('s-option')].find((o) => o.textContent.includes('(SMP-6)')).value;
+      el.value = [...el.querySelectorAll('s-option')].find((o) => o.textContent.includes('Single-Origin Select Box')).value;
       el.dispatchEvent(new Event('input', { bubbles: true }));
     });
     await page.waitForTimeout(1_000);
@@ -156,7 +173,7 @@ describe('Kit settings and categories', () => {
 
   it('lists kits with name, size and category', async () => {
     await open('settings');
-    assert.match(await text(), /SKU SMP-6/);
+    assert.match(await text(), new RegExp(`SKU ${KIT12_SKU}`));
     assert.ok(await app().locator('s-select[label="Category"]').count());
   });
 
@@ -168,8 +185,8 @@ describe('Kit settings and categories', () => {
 
   it('starts the chooser on the kit category, and stops when it is removed', async () => {
     await open('settings');
-    const dark = await categoryId('Dark chocolate');
-    assert.ok(dark, 'dev store has a Dark chocolate collection');
+    const dark = await categoryId('Dark');
+    assert.ok(dark, 'dev store has a Dark collection (the Dark mini category)');
     try {
       await ensureCategory(dark);
       // The 6-pack is the default kit, so Assemble should open on the category.
@@ -225,8 +242,8 @@ describe('Dropped connection', () => {
 
   it('shows an error on Settings instead of crashing', async () => {
     await open('settings');
-    const card = app().locator('s-section[heading*="6 Pack"]').first();
-    await setValue(card.locator('s-text-field[label="Name"]'), 'Sampler Kit - 6 Pack x');
+    const card = app().locator(`s-section[heading*="${KIT6}"]`).first();
+    await setValue(card.locator('s-text-field[label="Name"]'), `${KIT6} x`);
     await page.route(/\/app\/api\/kit-settings/, (r) => r.abort('connectionreset'));
     await card.locator('s-button', { hasText: 'Save changes' }).click();
     await app().waitForSelector('s-banner[tone="critical"]', { state: 'attached', timeout: 20_000 });
@@ -251,14 +268,14 @@ describe('Dropped connection', () => {
 
 describe('Stock edge cases', () => {
   it('refuses a stale submit when stock changed in Shopify, and changes nothing', async () => {
-    const { productVariants } = shopify('{ productVariants(first: 1, query: "sku:MINI-100-CACAO") { nodes { inventoryItem { id } } } }');
+    const { productVariants } = shopify('{ productVariants(first: 1, query: "sku:MIN-BOL-RAR") { nodes { inventoryItem { id } } } }');
     const { locations } = shopify('{ locations(first: 10) { nodes { id name } } }');
     const item = productVariants.nodes[0].inventoryItem.id;
-    const warehouse = locations.nodes.find((l) => l.name === 'Warehouse').id;
+    const stocked = locations.nodes.find((l) => l.name === STOCK_LOCATION).id;
     const nudge = (delta) =>
       shopify(
         'mutation($input: InventoryAdjustQuantitiesInput!, $key: String!) { inventoryAdjustQuantities(input: $input) @idempotent(key: $key) { userErrors { message } } }',
-        { key: crypto.randomUUID(), input: { name: 'available', reason: 'correction', changes: [{ inventoryItemId: item, locationId: warehouse, delta, changeFromQuantity: null }] } },
+        { key: crypto.randomUUID(), input: { name: 'available', reason: 'correction', changes: [{ inventoryItemId: item, locationId: stocked, delta, changeFromQuantity: null }] } },
       );
     await open('assemble');
     await fillMix();
@@ -282,7 +299,8 @@ describe('Stock edge cases', () => {
     const select = app().locator('s-select[label="Location"]');
     const previous = await select.evaluate((el) => el.value);
     try {
-      await setValue(select, await optionValue(select, 'Factory'));
+      // The minis are stocked only at the Factory, so the Warehouse has none.
+      await setValue(select, await optionValue(select, 'Warehouse'));
       await app().waitForFunction(() => /isn't stocked at this location/.test(document.body.innerText), null, { timeout: 15_000 });
       assert.notEqual(await app().locator('s-button', { hasText: /^Assemble/ }).first().getAttribute('disabled'), null);
     } finally {
@@ -306,7 +324,7 @@ describe('Create kit validation', () => {
     await app().locator('s-button', { hasText: 'Create a new kit' }).first().evaluate((el) => el.click());
     await page.waitForTimeout(1_000);
     await setValue(app().locator('s-text-field[label="Title"]'), 'Duplicate test');
-    await setValue(app().locator('s-text-field[label="SKU"]'), 'smp-6');
+    await setValue(app().locator('s-text-field[label="SKU"]'), KIT12_SKU.toLowerCase());
     await app().waitForFunction(() => [...document.querySelectorAll('s-text-field')].some((f) => /already in use/.test(f.error ?? '')), null, { timeout: 10_000 });
     assert.notEqual(await app().locator('s-button', { hasText: 'Create kit' }).first().getAttribute('disabled'), null);
   });
