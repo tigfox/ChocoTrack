@@ -329,3 +329,34 @@ describe('Create kit validation', () => {
     assert.notEqual(await app().locator('s-button', { hasText: 'Create kit' }).first().getAttribute('disabled'), null);
   });
 });
+
+describe('Inventory: unsaved edits', () => {
+  // Needs at least one tracked product (flag one with Add products); nothing here is saved, so stock and targets are untouched.
+  it('warns before "Done editing" drops unsaved rows; Keep editing keeps them, Discard drops them', async () => {
+    await open('inventory');
+    await app().locator('s-checkbox[label^="Show variants without targets"]').evaluate((el) => {
+      el.checked = true;
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await app().locator('s-button', { hasText: 'Edit targets' }).first().evaluate((el) => el.click());
+    const min = app().locator('s-number-field[label$="minimum"]').first();
+    await min.waitFor({ state: 'attached', timeout: 20_000 });
+    assert.match(await text(), /Each row saves on its own/);
+    await setValue(min, '1');
+    await setValue(app().locator('s-number-field[label$="maximum"]').first(), '2');
+
+    const done = () => app().locator('s-button', { hasText: 'Done editing' }).first().evaluate((el) => el.click());
+    await done();
+    await app().waitForFunction(() => /Unsaved changes/.test(document.body.innerText) && /1 row has changes you haven't saved/.test(document.body.innerText), null, { timeout: 15_000 });
+
+    await app().locator('s-button', { hasText: 'Keep editing' }).first().evaluate((el) => el.click());
+    await app().waitForFunction(() => !/Unsaved changes/.test(document.body.innerText), null, { timeout: 15_000 });
+    assert.equal(await min.evaluate((el) => el.value), '1', 'the typed value is still there');
+
+    await done();
+    await app().waitForFunction(() => /Unsaved changes/.test(document.body.innerText), null, { timeout: 15_000 });
+    await app().locator('s-button', { hasText: 'Discard changes' }).first().evaluate((el) => el.click());
+    await app().waitForFunction(() => [...document.querySelectorAll('s-button')].some((b) => b.textContent.trim() === 'Edit targets'), null, { timeout: 15_000 });
+    assert.doesNotMatch(await text(), /Saved targets/);
+  });
+});

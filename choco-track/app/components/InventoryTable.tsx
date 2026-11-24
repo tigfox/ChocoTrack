@@ -26,10 +26,11 @@ interface Props {
   readonly locations: readonly Location[];
   readonly editing: boolean;
   readonly onSave: (variant: ReportVariant, targets: Targets) => Promise<InventoryResponse>;
+  readonly onDirty?: (variantId: string, dirty: boolean) => void;
 }
 
 /** Tracked variants down the left, one column per stock location. The left column stays put while scrolling across. */
-export function InventoryTable({ groups, locations, editing, onSave }: Props) {
+export function InventoryTable({ groups, locations, editing, onSave, onDirty }: Props) {
   return (
     <div className="inv-scroll">
       <style>{CSS}</style>
@@ -61,6 +62,7 @@ export function InventoryTable({ groups, locations, editing, onSave }: Props) {
                     locations={locations}
                     editing={editing}
                     onSave={(targets) => onSave(row.variant, targets)}
+                    {...(onDirty ? { onDirty } : {})}
                   />
                 ))}
               </Fragment>
