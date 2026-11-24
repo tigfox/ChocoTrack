@@ -4,6 +4,22 @@ updates:
     directory: /choco-track
     schedule:
       interval: weekly
+    ignore:
+      # Blocked upstream: @shopify/shopify-app-session-storage-prisma peers on prisma ^6.
+      - dependency-name: "prisma"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@prisma/client"
+        update-types: ["version-update:semver-major"]
+      # Blocked upstream: @shopify/shopify-app-react-router peers on react-router ^7.
+      - dependency-name: "react-router"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@react-router/*"
+        update-types: ["version-update:semver-major"]
+      # Needs a migration from .eslintrc.cjs to flat config and newer typescript-eslint; do it as one change.
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "eslint-plugin-react-hooks"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: docker
     directory: /choco-track
     schedule:
