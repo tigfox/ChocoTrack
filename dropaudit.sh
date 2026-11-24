@@ -6,12 +6,15 @@
 set -uo pipefail
 
 APP=/opt/chocotrack
-DOMAIN="${1:-chocotrack.efranson.nyc}"
+DOMAIN="${1:-chocotrack.franson.nyc}"
 COMPOSE="$APP/docker-compose.yml"
 
+# The admin account is deliberately not in the docker group; use sudo for docker when needed.
+if ! docker info >/dev/null 2>&1; then docker() { sudo docker "$@"; }; export -f docker; fi
+
 section() { printf '\n===== %s =====\n' "$1"; }
-run() { printf '$ %s\n' "$*"; "$@" 2>&1 || printf '(exit %s)\n' "$?"; }
-sh_() { printf '$ %s\n' "$1"; bash -c "$1" 2>&1 || printf '(exit %s)\n' "$?"; }
+run() { printf '$ %s\n' "$*"; "$@" 2>&1 </dev/null || printf '(exit %s)\n' "$?"; }
+sh_() { printf '$ %s\n' "$1"; bash -c "$1" 2>&1 </dev/null || printf '(exit %s)\n' "$?"; }
 
 section "Host"
 sh_ 'hostnamectl | grep -E "Operating|Kernel"'
@@ -32,8 +35,8 @@ sh_ 'sudo awk -F: "(\$2==\"\" ) {print \$1\" HAS EMPTY PASSWORD\"}" /etc/shadow;
 sh_ 'sudo ls -l /etc/sudoers.d/'
 
 section "authorized_keys (type, options, comment only; key material trimmed)"
-for f in /home/*/.ssh/authorized_keys /root/.ssh/authorized_keys; do
-  [ -e "$f" ] || continue
+for f in $(sudo sh -c "ls /home/*/.ssh/authorized_keys /root/.ssh/authorized_keys 2>/dev/null"); do
+  sudo test -e "$f" || continue
   echo "--- $f"
   sudo awk '{ if ($1 ~ /^(ssh-|ecdsa-|sk-)/) print "no-options", $1, "...", $NF; else print "OPTIONS:", substr($0,1,80), "..." }' "$f"
   sudo stat -c '%a %U:%G' "$f"
