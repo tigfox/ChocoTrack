@@ -21,12 +21,18 @@ describe('handleKitSettings', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it('saves an edit', async () => {
-    const client = fakeClient(kitNode, updated, { metafieldsSet: { metafields: [], userErrors: [] } });
+    const client = fakeClient(kitNode, { metafieldsSet: { metafields: [], userErrors: [] } }, updated);
     await expect(handleKitSettings(client, edit)).resolves.toEqual({ ok: true, message: 'Saved Milk 5.' });
+  });
+  it('saves a size-only edit without renaming the product', async () => {
+    const client = fakeClient(kitNode, { metafieldsSet: { metafields: [], userErrors: [] } });
+    const noTitle = Object.fromEntries(Object.entries(edit).filter(([key]) => key !== 'title'));
+    await expect(handleKitSettings(client, noTitle)).resolves.toEqual({ ok: true, message: 'Saved the kit settings.' });
+    expect(client.calls.some((c) => c.query.includes('productUpdate'))).toBe(false);
   });
   it('links an existing variant as a kit', async () => {
     const found = { node: { title: 'Default Title', product: { id: 'gid://shopify/Product/5', title: '12 Bar Mini Sampler Box', tags: [] }, inventoryItem: { tracked: true } } };
-    const client = fakeClient(found, { tagsAdd: { userErrors: [] } }, { metafieldsSet: { metafields: [], userErrors: [] } }, { metafieldsDelete: { deletedMetafields: [], userErrors: [] } });
+    const client = fakeClient(found, { metafieldsSet: { metafields: [], userErrors: [] } }, { metafieldsDelete: { deletedMetafields: [], userErrors: [] } }, { tagsAdd: { userErrors: [] } });
     const out = await handleKitSettings(client, { intent: 'link', variantId: 'gid://shopify/ProductVariant/9', size: 12 });
     expect(out).toEqual({ ok: true, message: 'Added 12 Bar Mini Sampler Box as a 12-bar kit.' });
   });

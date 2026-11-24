@@ -35,7 +35,8 @@ export interface NewKit {
 /** The settings the store team can change on an existing kit. */
 export interface KitUpdate {
   readonly variantId: string;
-  readonly title: string;
+  /** Renames the PRODUCT (shared by all its variants). Leave out to keep the name. */
+  readonly title?: string;
   readonly size: KitSize;
   /** null removes the category. */
   readonly categoryId: string | null;
@@ -123,7 +124,7 @@ const writeKitSettings = async (client: GraphqlClient, variantId: string, size: 
 };
 
 /**
- * Edits an existing kit: the name lives on the product, the size and category on the variant.
+ * Edits an existing kit: the size and category live on the variant, the name on the product (renamed only when `title` is given).
  * The browser sends a variant id; it is only trusted once Shopify says its product is a tagged kit.
  */
 export const updateKit = async (client: GraphqlClient, update: KitUpdate): Promise<void> => {
@@ -132,11 +133,13 @@ export const updateKit = async (client: GraphqlClient, update: KitUpdate): Promi
   });
   const product = found.node?.product;
   if (!product || !product.tags.includes(KIT_TAG)) throw new ShopifyUserErrors('Update kit', [NOT_A_KIT]);
+  // The failure-prone writes come first, so a failure never leaves a renamed product with old settings.
+  await writeKitSettings(client, update.variantId, update.size, update.categoryId);
+  if (update.title === undefined) return;
   const { productUpdate } = await client<{ productUpdate: { userErrors: readonly UserError[] } }>(UPDATE_KIT_MUTATION, {
     product: { id: product.id, title: update.title },
   });
   assertNoUserErrors('Update kit', productUpdate.userErrors);
-  await writeKitSettings(client, update.variantId, update.size, update.categoryId);
 };
 
 /** An existing variant to use as a kit (for example a product the store already sells as a sampler box). */
@@ -160,7 +163,7 @@ const TAGS_ADD_MUTATION = `#graphql
 const DEFAULT_VARIANT_TITLE = 'Default Title';
 
 /**
- * Makes an existing variant a kit: tags its product and writes the size (and category) on the variant.
+ * Makes an existing variant a kit: writes the size (and category) on the variant, then tags its product.
  * Refuses a variant that does not track inventory, because assembling adds stock to it. Returns the kit's display name.
  */
 export const linkKit = async (client: GraphqlClient, link: KitLink): Promise<string> => {
@@ -173,10 +176,11 @@ export const linkKit = async (client: GraphqlClient, link: KitLink): Promise<str
     throw new ShopifyUserErrors('Link kit', [{ message: 'Turn on inventory tracking for that product in Shopify first, then add it as a kit.' }]);
   }
   const { product } = variant;
+  // Metafields first: if they fail nothing else has changed. Tagging last is what makes the kit appear in the list.
+  await writeKitSettings(client, link.variantId, link.size, link.categoryId);
   if (!product.tags.includes(KIT_TAG)) {
     const { tagsAdd } = await client<{ tagsAdd: { userErrors: readonly UserError[] } }>(TAGS_ADD_MUTATION, { id: product.id, tags: [KIT_TAG] });
     assertNoUserErrors('Link kit', tagsAdd.userErrors);
   }
-  await writeKitSettings(client, link.variantId, link.size, link.categoryId);
   return variant.title === undefined || variant.title === DEFAULT_VARIANT_TITLE ? product.title : `${product.title} - ${variant.title}`;
 };

@@ -30,7 +30,7 @@ export const handleKitSettings = async (client: GraphqlClient, raw: unknown): Pr
       const parsed = parseKitUpdate(raw);
       if (!parsed.ok) return fail(parsed.error);
       await updateKit(client, parsed.value);
-      return { ok: true, message: `Saved ${parsed.value.title}.` };
+      return { ok: true, message: parsed.value.title ? `Saved ${parsed.value.title}.` : 'Saved the kit settings.' };
     }
     return fail('Invalid request.');
   } catch (err) {

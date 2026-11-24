@@ -23,5 +23,8 @@ export function useSettingsAction() {
     [revalidate],
   );
 
-  return { busy, response, submit };
+  /** Forget the last outcome, so a reopened modal does not show an old error. */
+  const reset = useCallback(() => setResponse(undefined), []);
+
+  return { busy, response, submit, reset };
 }

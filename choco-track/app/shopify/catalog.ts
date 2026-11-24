@@ -108,16 +108,21 @@ const toResult = (nodes: readonly VariantNode[]): CatalogResult => ({
 
 const DEFAULT_VARIANT_TITLE = 'Default Title';
 
-/** The category product's title without the shared "Mini Bars - " prefix ("Mini Bars - Rare" becomes "Rare"). */
-const groupLabel = (productTitle: string): string => productTitle.replace(/^Mini Bars - /i, '');
+/** Category products are titled "Mini Bars - Rare"; their variants are the flavors. */
+const CATEGORY_PRODUCT_PREFIX = /^Mini Bars - /i;
+
+/** The category product's title without the shared prefix ("Mini Bars - Rare" becomes "Rare"). */
+const groupLabel = (productTitle: string): string => productTitle.replace(CATEGORY_PRODUCT_PREFIX, '');
 
 export const toCatalogVariant = (node: VariantNode): CatalogVariant => {
   const imageUrl = node.image?.url ?? node.product.featuredMedia?.preview?.image?.url;
   const kitSize = parseKitSize(node.kitSize?.value);
   const categoryId = node.category?.value;
   const isDefault = node.title === DEFAULT_VARIANT_TITLE;
-  // A flavor in a category product: the display name, else the humanized slug. Anything else keeps "Product - Variant".
-  const flavor = node.displayName?.value || (!isDefault && isFlavorSlug(node.title) ? humanizeFlavor(node.title) : undefined);
+  // A flavor: the display name, else (for a category product only) the humanized slug. Anything else keeps "Product - Variant",
+  // so a variant named "12" or "6-pack" on an ordinary product is not renamed.
+  const isCategoryFlavor = !isDefault && CATEGORY_PRODUCT_PREFIX.test(node.product.title) && isFlavorSlug(node.title);
+  const flavor = node.displayName?.value || (isCategoryFlavor ? humanizeFlavor(node.title) : undefined);
   return {
     id: node.id,
     inventoryItemId: node.inventoryItem.id,

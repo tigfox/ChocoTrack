@@ -69,24 +69,30 @@ describe('updateKit', () => {
   const variantId = 'gid://shopify/ProductVariant/1';
   const edit = { variantId, title: 'New name', size: 12 as const };
 
-  it('renames the product and writes size and category on the variant', async () => {
-    const client = fakeClient(kitProduct, renamed, written);
+  it('writes size and category on the variant, then renames the product', async () => {
+    const client = fakeClient(kitProduct, written, renamed);
     await updateKit(client, { ...edit, categoryId: 'gid://shopify/Collection/7' });
-    expect(client.calls[1]?.variables).toEqual({ product: { id: 'gid://shopify/Product/1', title: 'New name' } });
-    expect(client.calls[2]?.variables).toEqual({
+    expect(client.calls[1]?.variables).toEqual({
       metafields: [
         { ownerId: variantId, namespace: 'choco_track', key: 'kit_size', type: 'number_integer', value: '12' },
         { ownerId: variantId, namespace: 'choco_track', key: 'category', type: 'collection_reference', value: 'gid://shopify/Collection/7' },
       ],
     });
+    expect(client.calls[2]?.variables).toEqual({ product: { id: 'gid://shopify/Product/1', title: 'New name' } });
     expect(client.calls).toHaveLength(3);
   });
+  it('does not touch the product when no new name is given', async () => {
+    const client = fakeClient(kitProduct, written);
+    await updateKit(client, { variantId, size: 12, categoryId: 'gid://shopify/Collection/7' });
+    expect(client.calls).toHaveLength(2);
+    expect(client.calls.some((c) => c.query.includes('productUpdate'))).toBe(false);
+  });
   it('removes the variant category when none is chosen', async () => {
-    const client = fakeClient(kitProduct, renamed, written, removed);
+    const client = fakeClient(kitProduct, written, removed, renamed);
     await updateKit(client, { ...edit, categoryId: null });
-    const sent = (client.calls[2]?.variables as { metafields: { key: string }[] }).metafields;
+    const sent = (client.calls[1]?.variables as { metafields: { key: string }[] }).metafields;
     expect(sent.map((m) => m.key)).toEqual(['kit_size']);
-    expect(client.calls[3]?.variables).toEqual({ metafields: [{ ownerId: variantId, namespace: 'choco_track', key: 'category' }] });
+    expect(client.calls[2]?.variables).toEqual({ metafields: [{ ownerId: variantId, namespace: 'choco_track', key: 'category' }] });
   });
   it('refuses to edit a product that is not a kit', async () => {
     const client = fakeClient({ node: { product: { id: 'p', tags: ['other'] } } });
@@ -97,13 +103,15 @@ describe('updateKit', () => {
     const client = fakeClient({ node: null });
     await expect(updateKit(client, { ...edit, categoryId: null })).rejects.toThrow('That item is not a kit.');
   });
-  it('surfaces user errors from each write', async () => {
-    const badRename = { productUpdate: { product: null, userErrors: [{ message: 'Nope' }] } };
-    await expect(updateKit(fakeClient(kitProduct, badRename), { ...edit, categoryId: null })).rejects.toThrow('Nope');
+  it('surfaces user errors from each write, and does not rename when the metafields fail', async () => {
     const badSet = { metafieldsSet: { metafields: [], userErrors: [{ message: 'Bad value' }] } };
-    await expect(updateKit(fakeClient(kitProduct, renamed, badSet), { ...edit, categoryId: null })).rejects.toThrow('Bad value');
+    const failing = fakeClient(kitProduct, badSet);
+    await expect(updateKit(failing, { ...edit, categoryId: null })).rejects.toThrow('Bad value');
+    expect(failing.calls).toHaveLength(2);
     const badDelete = { metafieldsDelete: { deletedMetafields: [], userErrors: [{ message: 'Cannot delete' }] } };
-    await expect(updateKit(fakeClient(kitProduct, renamed, written, badDelete), { ...edit, categoryId: null })).rejects.toThrow('Cannot delete');
+    await expect(updateKit(fakeClient(kitProduct, written, badDelete), { ...edit, categoryId: null })).rejects.toThrow('Cannot delete');
+    const badRename = { productUpdate: { product: null, userErrors: [{ message: 'Nope' }] } };
+    await expect(updateKit(fakeClient(kitProduct, written, badRename), { ...edit, categoryId: 'gid://shopify/Collection/7' })).rejects.toThrow('Nope');
   });
 });
 
@@ -117,11 +125,11 @@ describe('linkKit', () => {
   const removed = { metafieldsDelete: { deletedMetafields: [], userErrors: [] } };
   const link = { variantId, size: 12 as const, categoryId: 'gid://shopify/Collection/7' };
 
-  it('tags the product and writes size and category on the variant', async () => {
-    const client = fakeClient(found(), tagged, written);
+  it('writes size and category on the variant, then tags the product', async () => {
+    const client = fakeClient(found(), written, tagged);
     await expect(linkKit(client, link)).resolves.toBe('12 Bar Mini Sampler Box');
-    expect(client.calls[1]?.variables).toEqual({ id: 'gid://shopify/Product/5', tags: ['choco-track-kit'] });
-    expect(client.calls[2]?.variables).toEqual({
+    expect(client.calls[2]?.variables).toEqual({ id: 'gid://shopify/Product/5', tags: ['choco-track-kit'] });
+    expect(client.calls[1]?.variables).toEqual({
       metafields: [
         { ownerId: variantId, namespace: 'choco_track', key: 'kit_size', type: 'number_integer', value: '12' },
         { ownerId: variantId, namespace: 'choco_track', key: 'category', type: 'collection_reference', value: 'gid://shopify/Collection/7' },
@@ -130,7 +138,7 @@ describe('linkKit', () => {
     expect(client.calls).toHaveLength(3);
   });
   it('names a variant of a multi-variant product', async () => {
-    const client = fakeClient(found({ title: '4 Minis (Mix)' }), tagged, written);
+    const client = fakeClient(found({ title: '4 Minis (Mix)' }), written, tagged);
     await expect(linkKit(client, link)).resolves.toBe('12 Bar Mini Sampler Box - 4 Minis (Mix)');
   });
   it('does not tag a product that already carries the kit tag', async () => {
@@ -139,9 +147,9 @@ describe('linkKit', () => {
     expect(client.calls).toHaveLength(2);
   });
   it('clears a previous category when none is chosen', async () => {
-    const client = fakeClient(found(), tagged, written, removed);
+    const client = fakeClient(found(), written, removed, tagged);
     await linkKit(client, { ...link, categoryId: null });
-    expect(client.calls[3]?.variables).toEqual({ metafields: [{ ownerId: variantId, namespace: 'choco_track', key: 'category' }] });
+    expect(client.calls[2]?.variables).toEqual({ metafields: [{ ownerId: variantId, namespace: 'choco_track', key: 'category' }] });
   });
   it('refuses a variant that does not exist', async () => {
     const client = fakeClient({ node: null });
@@ -153,10 +161,12 @@ describe('linkKit', () => {
     await expect(linkKit(client, link)).rejects.toThrow('Turn on inventory tracking');
     expect(client.calls).toHaveLength(1);
   });
-  it('surfaces user errors from each write', async () => {
-    const badTag = { tagsAdd: { userErrors: [{ message: 'Tag problem' }] } };
-    await expect(linkKit(fakeClient(found(), badTag), link)).rejects.toThrow('Tag problem');
+  it('surfaces user errors from each write, and does not tag when the metafields fail', async () => {
     const badSet = { metafieldsSet: { metafields: [], userErrors: [{ message: 'Bad value' }] } };
-    await expect(linkKit(fakeClient(found(), tagged, badSet), link)).rejects.toThrow('Bad value');
+    const failing = fakeClient(found(), badSet);
+    await expect(linkKit(failing, link)).rejects.toThrow('Bad value');
+    expect(failing.calls).toHaveLength(2);
+    const badTag = { tagsAdd: { userErrors: [{ message: 'Tag problem' }] } };
+    await expect(linkKit(fakeClient(found(), written, badTag), link)).rejects.toThrow('Tag problem');
   });
 });

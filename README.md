@@ -33,7 +33,7 @@ shopify store auth --store <store>.myshopify.com --scopes read_products,write_pr
 npx esbuild scripts/import-river-sea.mjs --bundle --platform=node --format=esm --outfile=/tmp/import-river-sea.mjs
 node /tmp/import-river-sea.mjs <store>.myshopify.com products_export_1.csv "Mini SKUs.csv" inventory_export_1.csv            # dry run
 node /tmp/import-river-sea.mjs <store>.myshopify.com products_export_1.csv "Mini SKUs.csv" inventory_export_1.csv --probe    # create and remove one throwaway product
-node /tmp/import-river-sea.mjs <store>.myshopify.com products_export_1.csv "Mini SKUs.csv" inventory_export_1.csv --apply --kits
+node /tmp/import-river-sea.mjs <store>.myshopify.com products_export_1.csv "Mini SKUs.csv" inventory_export_1.csv --apply --confirm=<store>.myshopify.com --kits   # asks you to repeat the domain before deleting every product
 node /tmp/import-river-sea.mjs <store>.myshopify.com products_export_1.csv "Mini SKUs.csv" inventory_export_1.csv --finish --kits  # only collections, flavor names, published flags, kits
 ```
 

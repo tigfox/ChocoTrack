@@ -46,8 +46,13 @@ describe('toCatalogVariant', () => {
       expect([v.title, v.group]).toEqual(['Desert Flower - 60g Bar', undefined]);
       expect(toCatalogVariant(node()).group).toBeUndefined();
     });
-    it('keeps the full product title as the group when it has no Mini Bars prefix', () => {
-      expect(toCatalogVariant(node({ title: 'desert-flower' }, { title: 'Flavors' })).group).toBe('Flavors');
+    it('uses the product title as the group for a staff-named variant of another product', () => {
+      const v = toCatalogVariant(node({ title: 'desert-flower', displayName: { value: 'Desert Flower' } }, { title: 'Flavors' }));
+      expect([v.title, v.group]).toEqual(['Desert Flower', 'Flavors']);
+    });
+    it.each(['12', 'small', '6-pack', 'gift-box'])('does not rename a "%s" variant of an ordinary product', (title) => {
+      const v = toCatalogVariant(node({ title }, { title: 'Mini Sampler Box' }));
+      expect([v.title, v.group]).toEqual([`Mini Sampler Box - ${title}`, undefined]);
     });
   });
   it('prefers the variant image, then the product image', () => {

@@ -1,7 +1,7 @@
 // Replaces every product in a DEVELOPMENT store with the River Sea product export, then sets starting stock.
 // Refuses to run against a store that is not a partner development store. Without --apply it only validates and prints a summary.
 // --finish skips the delete and import: it only syncs the collections, flavor names and published flags (and, with --kits, marks the kit variants) on the store as it is.
-// Usage: npx esbuild scripts/import-river-sea.mjs --bundle --platform=node --format=esm --outfile=/tmp/import-river-sea.mjs && node /tmp/import-river-sea.mjs <store>.myshopify.com <products_export.csv> <Mini SKUs.csv> <inventory_export.csv> [--apply | --finish] [--kits]
+// Usage: npx esbuild scripts/import-river-sea.mjs --bundle --platform=node --format=esm --outfile=/tmp/import-river-sea.mjs && node /tmp/import-river-sea.mjs <store>.myshopify.com <products_export.csv> <Mini SKUs.csv> <inventory_export.csv> [--apply --confirm=<store> | --finish] [--kits]
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { csvToRecords, parseCsv } from "../app/lib/csvParse";
@@ -17,8 +17,9 @@ import { planStock, STOCK_LOCATIONS } from "../app/lib/riverSeaStock";
 
 const [store, exportPath, skuPath, inventoryPath, ...flags] = process.argv.slice(2);
 const apply = flags.includes("--apply");
-if (!store?.endsWith(".myshopify.com") || !exportPath || !skuPath || !inventoryPath) {
-  console.error("Usage: node scripts/import-river-sea.mjs <store>.myshopify.com <products_export.csv> <Mini SKUs.csv> <inventory_export.csv> [--apply | --finish] [--kits]");
+// A plain shop domain only: anything starting with "-" could be read as a CLI flag.
+if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(store ?? "") || !exportPath || !skuPath || !inventoryPath) {
+  console.error("Usage: node scripts/import-river-sea.mjs <store>.myshopify.com <products_export.csv> <Mini SKUs.csv> <inventory_export.csv> [--apply --confirm=<store>.myshopify.com | --finish] [--kits]");
   process.exit(1);
 }
 
@@ -196,7 +197,8 @@ if (!apply) {
   process.exit(0);
 }
 
-// 3. Delete every existing product.
+// 3. Delete every existing product. A partner development store can also be a client's store that already holds real
+// products, so deleting needs the domain typed again as --confirm, after showing what will be lost.
 const existing = [];
 for (let after = null; ; ) {
   const d = run("query($after: String) { products(first: 50, after: $after) { pageInfo { hasNextPage endCursor } nodes { id handle } } }", { after }).products;
@@ -204,7 +206,12 @@ for (let after = null; ; ) {
   if (!d.pageInfo.hasNextPage) break;
   after = d.pageInfo.endCursor;
 }
-console.log(`Deleting ${existing.length} existing products...`);
+console.log(`The store has ${existing.length} products, which will be deleted.`);
+if (!flags.includes(`--confirm=${store}`)) {
+  console.error(`Refusing to delete: re-run with --confirm=${store} to confirm.`);
+  process.exit(1);
+}
+console.log("Deleting...");
 for (const p of existing) {
   const d = run("mutation($input: ProductDeleteInput!) { productDelete(input: $input, synchronous: true) { deletedProductId userErrors { field message } } }", { input: { id: p.id } }, true).productDelete;
   userErrors(`delete ${p.handle}`, d.userErrors);

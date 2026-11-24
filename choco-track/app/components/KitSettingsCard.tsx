@@ -26,8 +26,10 @@ export function KitSettingsCard({ kit, collections }: Props) {
 
   const sizeProblem = kitSizeError(Number(size));
   const changed = title.trim() !== kit.title || Number(size) !== kit.kitSize || categoryId !== (kit.categoryId ?? "");
+  // Only send the name when it was edited: it renames the whole product, which a size or category change must not do.
+  const renamed = title.trim() !== kit.title;
   const save = () =>
-    submit({ intent: "update", kitId: kit.id, title: title.trim(), size: Number(size), categoryId });
+    submit({ intent: "update", kitId: kit.id, ...(renamed ? { title: title.trim() } : {}), size: Number(size), categoryId });
 
   return (
     <s-section heading={kit.title}>

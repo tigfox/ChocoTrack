@@ -7,9 +7,9 @@ export type ProductSetContext = {
   /** Export category text -> Shopify taxonomy category GID. */
   readonly categoryIds: Readonly<Record<string, string>>;
   readonly stockFor: (product: ExportProduct, variant: ExportVariant) => readonly StockLine[];
-  /** Size of the kit this variant should be marked as, if any (tags the product and sets the variant metafield). */
   /** A name to show for this variant, stored in its choco_track.display_name metafield. */
   readonly displayNameFor?: (product: ExportProduct, variant: ExportVariant) => string | undefined;
+  /** Size of the kit this variant should be marked as, if any (tags the product and sets the variant metafield). */
   readonly kitSizeFor?: (product: ExportProduct, variant: ExportVariant) => number | undefined;
 };
 export type ProductSetInput = Record<string, unknown> & { readonly variants: readonly Record<string, unknown>[] };

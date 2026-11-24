@@ -18,7 +18,7 @@ interface Props {
 export function KitSettingsView({ workspace, sourceIds, multiples }: Props) {
   const [creating, setCreating] = useState(false);
   const [linking, setLinking] = useState(false);
-  const { busy, response, submit } = useSettingsAction();
+  const { busy, response, submit, reset } = useSettingsAction();
   const closeModal = useCallback(() => setCreating(false), []);
   const closeLink = useCallback(() => setLinking(false), []);
 
@@ -44,10 +44,20 @@ export function KitSettingsView({ workspace, sourceIds, multiples }: Props) {
               <KitSettingsCard key={kit.id} kit={kit} collections={workspace.collections} />
             ))}
             <s-stack direction="inline" gap="base">
-              <s-button variant="primary" onClick={() => setLinking(true)}>
+              <s-button variant="primary" onClick={() => {
+                  reset();
+                  setLinking(true);
+                }}>
                 Use an existing product as a kit
               </s-button>
-              <s-button onClick={() => setCreating(true)}>Create a new kit</s-button>
+              <s-button
+                onClick={() => {
+                  reset();
+                  setCreating(true);
+                }}
+              >
+                Create a new kit
+              </s-button>
             </s-stack>
           </s-stack>
         </CollapsibleSection>
