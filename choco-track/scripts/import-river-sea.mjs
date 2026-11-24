@@ -1,11 +1,14 @@
 // Replaces every product in a DEVELOPMENT store with the River Sea product export, then sets starting stock.
 // Refuses to run against a store that is not a partner development store. Without --apply it only validates and prints a summary.
-// Usage: npx esbuild scripts/import-river-sea.mjs --bundle --platform=node --format=esm --outfile=/tmp/import-river-sea.mjs && node /tmp/import-river-sea.mjs <store>.myshopify.com <products_export.csv> <Mini SKUs.csv> <inventory_export.csv> [--apply]
+// --finish skips the delete and import: it only syncs the collections (and, with --kits, marks the kit variants) on the store as it is.
+// Usage: npx esbuild scripts/import-river-sea.mjs --bundle --platform=node --format=esm --outfile=/tmp/import-river-sea.mjs && node /tmp/import-river-sea.mjs <store>.myshopify.com <products_export.csv> <Mini SKUs.csv> <inventory_export.csv> [--apply | --finish] [--kits]
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { csvToRecords, parseCsv } from "../app/lib/csvParse";
 import { groupProducts } from "../app/lib/riverSeaExport";
 import { buildProductSetInput } from "../app/lib/riverSeaProductSet";
+import { collectionSpecs, MINI_CATEGORIES, STALE_COLLECTION_TITLES } from "../app/lib/riverSeaCollections";
+import { KIT_SIZE_METAFIELD, KIT_TAG, kitSizeFor } from "../app/lib/riverSeaKits";
 import { parseInventory, actualStockKey } from "../app/lib/riverSeaInventory";
 import { applySkus, parseSkuCsv } from "../app/lib/riverSeaSkus";
 import { planStock, STOCK_LOCATIONS } from "../app/lib/riverSeaStock";
@@ -13,18 +16,12 @@ import { planStock, STOCK_LOCATIONS } from "../app/lib/riverSeaStock";
 const [store, exportPath, skuPath, inventoryPath, ...flags] = process.argv.slice(2);
 const apply = flags.includes("--apply");
 if (!store?.endsWith(".myshopify.com") || !exportPath || !skuPath || !inventoryPath) {
-  console.error("Usage: node scripts/import-river-sea.mjs <store>.myshopify.com <products_export.csv> <Mini SKUs.csv> <inventory_export.csv> [--apply]");
+  console.error("Usage: node scripts/import-river-sea.mjs <store>.myshopify.com <products_export.csv> <Mini SKUs.csv> <inventory_export.csv> [--apply | --finish] [--kits]");
   process.exit(1);
 }
 
-const SKU_CATEGORY_HANDLES = {
-  "Limited Editions": "mini-bars-limited-editions",
-  "Dark Milks": "mini-bars-dark-milks",
-  Rare: "mini-bars-rare",
-  "Single Origin": "mini-bars-single-origins",
-  Dark: "mini-bars-darks",
-  Milk: "mini-bars-milks",
-};
+// Mini SKUs.csv names the six categories that have SKUs; White Chocolate has none yet.
+const SKU_CATEGORY_HANDLES = Object.fromEntries(MINI_CATEGORIES.filter((c) => c.title !== "White Chocolate").map((c) => [c.title, c.handle]));
 
 const run = (query, variables, mutate = false) => {
   const args = ["store", "execute", "--store", store, "--json", "--query", query];
@@ -50,6 +47,38 @@ const seeded = (seed) => () => {
   t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 };
+
+// Collections: remove the old seed ones, then create the smart collections (skipping any that already exist).
+async function syncCollections() {
+  const collections = run("{ collections(first: 100) { nodes { id title } } }").collections.nodes;
+  for (const c of collections.filter((x) => STALE_COLLECTION_TITLES.includes(x.title))) {
+    userErrors(`delete collection ${c.title}`, run("mutation($input: CollectionDeleteInput!) { collectionDelete(input: $input) { userErrors { field message } } }", { input: { id: c.id } }, true).collectionDelete.userErrors);
+    console.log(`removed old collection ${c.title}`);
+  }
+  for (const spec of specs.filter((x) => !collections.some((c) => c.title === x.title))) {
+    const input = { title: spec.title, ruleSet: { appliedDisjunctively: false, rules: spec.rules } };
+    userErrors(`collection ${spec.title}`, run("mutation($input: CollectionInput!) { collectionCreate(input: $input) { userErrors { field message } } }", { input }, true).collectionCreate.userErrors);
+    console.log(`created collection ${spec.title}`);
+  }
+}
+
+// Kits on an already-imported store: tag each kit product and set the size on the variant.
+async function markKitsInStore() {
+  for (const p of products) {
+    const sizes = new Map(p.variants.flatMap((v) => (kitSizeFor(p, v) === undefined ? [] : [[v.optionValues.join("\u0000"), kitSizeFor(p, v)]])));
+    if (sizes.size === 0) continue;
+    const found = run("query($h: String!) { productByHandle(handle: $h) { id tags variants(first: 50) { nodes { id selectedOptions { value } } } } }", { h: p.handle }).productByHandle;
+    if (!found) throw new Error(`Store has no product ${p.handle}; run --apply first`);
+    if (!found.tags.includes(KIT_TAG)) userErrors(`tag ${p.handle}`, run("mutation($id: ID!, $tags: [String!]!) { tagsAdd(id: $id, tags: $tags) { userErrors { field message } } }", { id: found.id, tags: [KIT_TAG] }, true).tagsAdd.userErrors);
+    const metafields = found.variants.nodes.flatMap((v) => {
+      const size = sizes.get(v.selectedOptions.map((o) => o.value).join("\u0000"));
+      return size === undefined ? [] : [{ ownerId: v.id, namespace: KIT_SIZE_METAFIELD.namespace, key: KIT_SIZE_METAFIELD.key, type: "number_integer", value: String(size) }];
+    });
+    if (metafields.length === 0) continue;
+    userErrors(`kit sizes ${p.handle}`, run("mutation($m: [MetafieldsSetInput!]!) { metafieldsSet(metafields: $m) { userErrors { field message } } }", { m: metafields }, true).metafieldsSet.userErrors);
+    console.log(`marked ${metafields.length} kit variant(s) on ${p.handle}`);
+  }
+}
 
 // 1. Safety: only ever touch a development store.
 const shop = run("{ shop { name myshopifyDomain plan { partnerDevelopment } } }").shop;
@@ -80,9 +109,15 @@ for (const name of new Set(products.map((p) => p.category).filter(Boolean))) {
 const random = seeded(2026);
 const actual = parseInventory(csvToRecords(parseCsv(readFileSync(inventoryPath, "utf8"))));
 const stockFor = (p, v) => planStock(p, v, locations, random, actual.get(actualStockKey(p.handle, v.optionValues)));
-const inputs = products.map((p) => ({ handle: p.handle, input: buildProductSetInput(p, { categoryIds, stockFor }) }));
+const markKits = flags.includes("--kits");
+const inputs = products.map((p) => ({ handle: p.handle, input: buildProductSetInput(p, { categoryIds, stockFor, ...(markKits ? { kitSizeFor } : {}) }) }));
+const specs = collectionSpecs(products);
 
 const variants = products.flatMap((p) => p.variants);
+if (markKits) {
+  const kits = products.flatMap((p) => p.variants.flatMap((v) => (kitSizeFor(p, v) === undefined ? [] : [`${p.handle} / ${v.optionValues.join(" ")} = ${kitSizeFor(p, v)}`])));
+  console.log(`Kits to mark (${kits.length}):\n  ${kits.join("\n  ")}`);
+}
 console.log(`Parsed ${products.length} products, ${variants.length} variants, ${variants.filter((v) => v.sku).length} with SKUs, ${variants.filter((v) => v.tracked).length} tracked.`);
 if (flags.includes("--probe")) {
   // Creates one product (the first mini bars category) under a throwaway handle, reads it back, then deletes it.
@@ -98,8 +133,14 @@ if (flags.includes("--probe")) {
   console.log("Probe OK and removed.");
   process.exit(0);
 }
+if (flags.includes("--finish")) {
+  await syncCollections();
+  if (markKits) await markKitsInStore();
+  console.log("Finished collections" + (markKits ? " and kits." : "."));
+  process.exit(0);
+}
 if (!apply) {
-  console.log("Dry run only. Re-run with --apply to delete the store's products and import these.");
+  console.log("Dry run only. Re-run with --apply to delete the store's products and import these (or --finish to only sync collections and kits).");
   process.exit(0);
 }
 
@@ -130,6 +171,8 @@ for (const [i, { handle, input }] of inputs.entries()) {
   }
 }
 console.log(`Imported ${inputs.length - failures.length}/${inputs.length}.`);
+
+await syncCollections();
 if (failures.length) {
   console.error(JSON.stringify(failures, null, 2));
   process.exit(2);

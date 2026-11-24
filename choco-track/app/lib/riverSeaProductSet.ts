@@ -1,10 +1,13 @@
 import type { ExportProduct, ExportVariant } from './riverSeaExport';
+import { KIT_SIZE_METAFIELD, KIT_TAG } from './riverSeaKits';
 import type { StockLine } from './riverSeaStock';
 
 export type ProductSetContext = {
   /** Export category text -> Shopify taxonomy category GID. */
   readonly categoryIds: Readonly<Record<string, string>>;
   readonly stockFor: (product: ExportProduct, variant: ExportVariant) => readonly StockLine[];
+  /** Size of the kit this variant should be marked as, if any (tags the product and sets the variant metafield). */
+  readonly kitSizeFor?: (product: ExportProduct, variant: ExportVariant) => number | undefined;
 };
 export type ProductSetInput = Record<string, unknown> & { readonly variants: readonly Record<string, unknown>[] };
 
@@ -13,6 +16,7 @@ const unique = <T>(list: readonly T[]): readonly T[] => [...new Set(list)];
 
 const buildVariant = (product: ExportProduct, v: ExportVariant, ctx: ProductSetContext): Record<string, unknown> => {
   const stock = ctx.stockFor(product, v);
+  const kitSize = ctx.kitSizeFor?.(product, v);
   return {
     optionValues: product.optionNames.map((optionName, i) => ({ optionName, name: v.optionValues[i] ?? '' })),
     sku: v.sku,
@@ -29,6 +33,7 @@ const buildVariant = (product: ExportProduct, v: ExportVariant, ctx: ProductSetC
       ...(v.grams !== null ? { measurement: { weight: { value: Number((v.grams / GRAMS_PER_POUND).toFixed(6)), unit: 'POUNDS' } } } : {}),
     },
     ...(stock.length > 0 ? { inventoryQuantities: stock } : {}),
+    ...(kitSize !== undefined ? { metafields: [{ ...KIT_SIZE_METAFIELD, type: 'number_integer', value: String(kitSize) }] } : {}),
   };
 };
 
@@ -40,6 +45,7 @@ export const buildProductSetInput = (product: ExportProduct, ctx: ProductSetCont
     ...[...product.images].sort((a, b) => a.position - b.position).map((i) => i.src),
     ...product.variants.map((v) => v.image).filter(Boolean),
   ]);
+  const hasKit = product.variants.some((v) => ctx.kitSizeFor?.(product, v) !== undefined);
   const altBySrc = new Map(product.images.map((i) => [i.src, i.alt]));
   return {
     handle: product.handle,
@@ -47,7 +53,7 @@ export const buildProductSetInput = (product: ExportProduct, ctx: ProductSetCont
     descriptionHtml: product.bodyHtml,
     vendor: product.vendor,
     productType: product.type,
-    tags: product.tags,
+    tags: hasKit ? [...new Set([...product.tags, KIT_TAG])] : product.tags,
     status: product.status,
     ...(category ? { category } : {}),
     ...(product.giftCard ? { giftCard: true } : {}),

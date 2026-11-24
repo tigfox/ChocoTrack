@@ -44,6 +44,16 @@ describe('buildProductSetInput', () => {
     const out = buildProductSetInput({ ...product, variants: [untracked] }, ctx);
     expect((out.variants[0] as { inventoryItem: { tracked: boolean } }).inventoryItem.tracked).toBe(true);
   });
+  it('marks a kit variant: tags the product and writes the size on the variant', () => {
+    const out = buildProductSetInput(product, { ...ctx, kitSizeFor: () => 12 });
+    expect(out.tags).toEqual(['Bars', 'choco-track-kit']);
+    expect((out.variants[0] as { metafields: unknown[] }).metafields).toEqual([{ namespace: 'choco_track', key: 'kit_size', type: 'number_integer', value: '12' }]);
+  });
+  it('adds nothing kit-related when no variant is a kit', () => {
+    const out = buildProductSetInput(product, { ...ctx, kitSizeFor: () => undefined });
+    expect(out.tags).toEqual(['Bars']);
+    expect(out.variants[0]).not.toHaveProperty('metafields');
+  });
   it('fails on a category with no taxonomy match', () => {
     expect(() => buildProductSetInput(product, { ...ctx, categoryIds: {} })).toThrow(/category/i);
   });

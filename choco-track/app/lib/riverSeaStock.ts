@@ -1,3 +1,4 @@
+import { MINI_CATEGORIES } from './riverSeaCollections';
 import type { ExportProduct, ExportVariant } from './riverSeaExport';
 
 /** The four dev-store locations, in the order quantities are listed. */
@@ -6,15 +7,7 @@ export type StockLocation = (typeof STOCK_LOCATIONS)[number];
 type Location = StockLocation;
 export type StockLine = { readonly locationId: string; readonly name: 'available'; readonly quantity: number };
 
-const MINI_HANDLES: ReadonlySet<string> = new Set([
-  'mini-bars-limited-editions',
-  'mini-bars-dark-milks',
-  'mini-bars-rare',
-  'mini-bars-single-origins',
-  'mini-bars-darks',
-  'mini-bars-milks',
-  'mini-bars-white-chocolate',
-]);
+const MINI_HANDLES: ReadonlySet<string> = new Set(MINI_CATEGORIES.map((c) => c.handle));
 const FULL_BAR_STOCK: Readonly<Record<Location, number>> = { Warehouse: 1500, Factory: 500, 'Market Store': 50, Cafe: 50 };
 const MINI_STOCK = 1500;
 const RANDOM_MIN = 10;
