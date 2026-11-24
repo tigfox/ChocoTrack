@@ -1,5 +1,5 @@
 import { fakeClient } from './fakeClient';
-import { createKit, updateKit } from './kits';
+import { createKit, linkKit, updateKit } from './kits';
 
 const product = {
   title: 'Sampler Kit - 5 Pack',
@@ -104,5 +104,59 @@ describe('updateKit', () => {
     await expect(updateKit(fakeClient(kitProduct, renamed, badSet), { ...edit, categoryId: null })).rejects.toThrow('Bad value');
     const badDelete = { metafieldsDelete: { deletedMetafields: [], userErrors: [{ message: 'Cannot delete' }] } };
     await expect(updateKit(fakeClient(kitProduct, renamed, written, badDelete), { ...edit, categoryId: null })).rejects.toThrow('Cannot delete');
+  });
+});
+
+describe('linkKit', () => {
+  const variantId = 'gid://shopify/ProductVariant/9';
+  const found = (over: Record<string, unknown> = {}) => ({
+    node: { title: 'Default Title', product: { id: 'gid://shopify/Product/5', title: '12 Bar Mini Sampler Box', tags: ['Gifts'] }, inventoryItem: { tracked: true }, ...over },
+  });
+  const tagged = { tagsAdd: { userErrors: [] } };
+  const written = { metafieldsSet: { metafields: [{ key: 'kit_size' }], userErrors: [] } };
+  const removed = { metafieldsDelete: { deletedMetafields: [], userErrors: [] } };
+  const link = { variantId, size: 12 as const, categoryId: 'gid://shopify/Collection/7' };
+
+  it('tags the product and writes size and category on the variant', async () => {
+    const client = fakeClient(found(), tagged, written);
+    await expect(linkKit(client, link)).resolves.toBe('12 Bar Mini Sampler Box');
+    expect(client.calls[1]?.variables).toEqual({ id: 'gid://shopify/Product/5', tags: ['choco-track-kit'] });
+    expect(client.calls[2]?.variables).toEqual({
+      metafields: [
+        { ownerId: variantId, namespace: 'choco_track', key: 'kit_size', type: 'number_integer', value: '12' },
+        { ownerId: variantId, namespace: 'choco_track', key: 'category', type: 'collection_reference', value: 'gid://shopify/Collection/7' },
+      ],
+    });
+    expect(client.calls).toHaveLength(3);
+  });
+  it('names a variant of a multi-variant product', async () => {
+    const client = fakeClient(found({ title: '4 Minis (Mix)' }), tagged, written);
+    await expect(linkKit(client, link)).resolves.toBe('12 Bar Mini Sampler Box - 4 Minis (Mix)');
+  });
+  it('does not tag a product that already carries the kit tag', async () => {
+    const client = fakeClient(found({ product: { id: 'p', title: 'T', tags: ['choco-track-kit'] } }), written);
+    await linkKit(client, link);
+    expect(client.calls).toHaveLength(2);
+  });
+  it('clears a previous category when none is chosen', async () => {
+    const client = fakeClient(found(), tagged, written, removed);
+    await linkKit(client, { ...link, categoryId: null });
+    expect(client.calls[3]?.variables).toEqual({ metafields: [{ ownerId: variantId, namespace: 'choco_track', key: 'category' }] });
+  });
+  it('refuses a variant that does not exist', async () => {
+    const client = fakeClient({ node: null });
+    await expect(linkKit(client, link)).rejects.toThrow('That product was not found.');
+    expect(client.calls).toHaveLength(1);
+  });
+  it('refuses a variant that does not track inventory, without changing anything', async () => {
+    const client = fakeClient(found({ inventoryItem: { tracked: false } }));
+    await expect(linkKit(client, link)).rejects.toThrow('Turn on inventory tracking');
+    expect(client.calls).toHaveLength(1);
+  });
+  it('surfaces user errors from each write', async () => {
+    const badTag = { tagsAdd: { userErrors: [{ message: 'Tag problem' }] } };
+    await expect(linkKit(fakeClient(found(), badTag), link)).rejects.toThrow('Tag problem');
+    const badSet = { metafieldsSet: { metafields: [], userErrors: [{ message: 'Bad value' }] } };
+    await expect(linkKit(fakeClient(found(), tagged, badSet), link)).rejects.toThrow('Bad value');
   });
 });

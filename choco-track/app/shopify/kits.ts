@@ -108,6 +108,20 @@ const DELETE_CATEGORY_MUTATION = `#graphql
 
 const NOT_A_KIT: UserError = { message: 'That item is not a kit.' };
 
+/** Writes the kit size, and the category (or removes it), on the variant. */
+const writeKitSettings = async (client: GraphqlClient, variantId: string, size: KitSize, categoryId: string | null): Promise<void> => {
+  const owned = (m: Record<string, string>) => ({ ownerId: variantId, ...m });
+  const { metafieldsSet } = await client<{ metafieldsSet: { userErrors: readonly UserError[] } }>(SET_METAFIELDS_MUTATION, {
+    metafields: [sizeMetafield(size), ...(categoryId ? [categoryMetafield(categoryId)] : [])].map(owned),
+  });
+  assertNoUserErrors('Update kit', metafieldsSet.userErrors);
+  if (categoryId !== null) return;
+  const { metafieldsDelete } = await client<{ metafieldsDelete: { userErrors: readonly UserError[] } }>(DELETE_CATEGORY_MUTATION, {
+    metafields: [owned(CATEGORY_METAFIELD)],
+  });
+  assertNoUserErrors('Update kit', metafieldsDelete.userErrors);
+};
+
 /**
  * Edits an existing kit: the name lives on the product, the size and category on the variant.
  * The browser sends a variant id; it is only trusted once Shopify says its product is a tagged kit.
@@ -122,14 +136,47 @@ export const updateKit = async (client: GraphqlClient, update: KitUpdate): Promi
     product: { id: product.id, title: update.title },
   });
   assertNoUserErrors('Update kit', productUpdate.userErrors);
-  const owned = (m: Record<string, string>) => ({ ownerId: update.variantId, ...m });
-  const { metafieldsSet } = await client<{ metafieldsSet: { userErrors: readonly UserError[] } }>(SET_METAFIELDS_MUTATION, {
-    metafields: [sizeMetafield(update.size), ...(update.categoryId ? [categoryMetafield(update.categoryId)] : [])].map(owned),
-  });
-  assertNoUserErrors('Update kit', metafieldsSet.userErrors);
-  if (update.categoryId !== null) return;
-  const { metafieldsDelete } = await client<{ metafieldsDelete: { userErrors: readonly UserError[] } }>(DELETE_CATEGORY_MUTATION, {
-    metafields: [owned(CATEGORY_METAFIELD)],
-  });
-  assertNoUserErrors('Update kit', metafieldsDelete.userErrors);
+  await writeKitSettings(client, update.variantId, update.size, update.categoryId);
+};
+
+/** An existing variant to use as a kit (for example a product the store already sells as a sampler box). */
+export interface KitLink {
+  readonly variantId: string;
+  readonly size: KitSize;
+  /** null means no category. */
+  readonly categoryId: string | null;
+}
+
+const LINK_LOOKUP_QUERY = `#graphql
+  query LinkKit($id: ID!) {
+    node(id: $id) { ... on ProductVariant { title inventoryItem { tracked } product { id title tags } } }
+  }
+`;
+
+const TAGS_ADD_MUTATION = `#graphql
+  mutation TagKit($id: ID!, $tags: [String!]!) { tagsAdd(id: $id, tags: $tags) { userErrors { field message } } }
+`;
+
+const DEFAULT_VARIANT_TITLE = 'Default Title';
+
+/**
+ * Makes an existing variant a kit: tags its product and writes the size (and category) on the variant.
+ * Refuses a variant that does not track inventory, because assembling adds stock to it. Returns the kit's display name.
+ */
+export const linkKit = async (client: GraphqlClient, link: KitLink): Promise<string> => {
+  const found = await client<{
+    node: { title?: string; inventoryItem?: { tracked: boolean }; product?: { id: string; title: string; tags: readonly string[] } } | null;
+  }>(LINK_LOOKUP_QUERY, { id: link.variantId });
+  const variant = found.node;
+  if (!variant?.product || !variant.inventoryItem) throw new ShopifyUserErrors('Link kit', [{ message: 'That product was not found.' }]);
+  if (!variant.inventoryItem.tracked) {
+    throw new ShopifyUserErrors('Link kit', [{ message: 'Turn on inventory tracking for that product in Shopify first, then add it as a kit.' }]);
+  }
+  const { product } = variant;
+  if (!product.tags.includes(KIT_TAG)) {
+    const { tagsAdd } = await client<{ tagsAdd: { userErrors: readonly UserError[] } }>(TAGS_ADD_MUTATION, { id: product.id, tags: [KIT_TAG] });
+    assertNoUserErrors('Link kit', tagsAdd.userErrors);
+  }
+  await writeKitSettings(client, link.variantId, link.size, link.categoryId);
+  return variant.title === undefined || variant.title === DEFAULT_VARIANT_TITLE ? product.title : `${product.title} - ${variant.title}`;
 };

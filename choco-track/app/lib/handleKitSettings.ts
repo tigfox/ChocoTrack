@@ -1,7 +1,8 @@
 import type { GraphqlClient } from '../shopify/client';
 import { friendlyMessage } from '../shopify/errors';
-import { createKit, updateKit } from '../shopify/kits';
+import { createKit, linkKit, updateKit } from '../shopify/kits';
 import { parseKitUpdate } from './kitUpdateInput';
+import { parseLinkKit } from './linkKitInput';
 import { logError } from './logError';
 import { parseNewKit } from './newKitInput';
 
@@ -9,7 +10,7 @@ export type SettingsResponse = { readonly ok: true; readonly message: string } |
 
 const fail = (message: string): SettingsResponse => ({ ok: false, message });
 
-/** Creates or edits a kit from the Settings page. The body is untrusted JSON. */
+/** Creates, links or edits a kit from the Settings page. The body is untrusted JSON. */
 export const handleKitSettings = async (client: GraphqlClient, raw: unknown): Promise<SettingsResponse> => {
   const intent = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>).intent : undefined;
   try {
@@ -18,6 +19,12 @@ export const handleKitSettings = async (client: GraphqlClient, raw: unknown): Pr
       if (!parsed.ok) return fail(parsed.error);
       await createKit(client, parsed.value);
       return { ok: true, message: `Created ${parsed.value.title}.` };
+    }
+    if (intent === 'link') {
+      const parsed = parseLinkKit(raw);
+      if (!parsed.ok) return fail(parsed.error);
+      const name = await linkKit(client, parsed.value);
+      return { ok: true, message: `Added ${name} as a ${parsed.value.size}-bar kit.` };
     }
     if (intent === 'update') {
       const parsed = parseKitUpdate(raw);

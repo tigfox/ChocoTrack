@@ -24,6 +24,17 @@ describe('handleKitSettings', () => {
     const client = fakeClient(kitNode, updated, { metafieldsSet: { metafields: [], userErrors: [] } });
     await expect(handleKitSettings(client, edit)).resolves.toEqual({ ok: true, message: 'Saved Milk 5.' });
   });
+  it('links an existing variant as a kit', async () => {
+    const found = { node: { title: 'Default Title', product: { id: 'gid://shopify/Product/5', title: '12 Bar Mini Sampler Box', tags: [] }, inventoryItem: { tracked: true } } };
+    const client = fakeClient(found, { tagsAdd: { userErrors: [] } }, { metafieldsSet: { metafields: [], userErrors: [] } }, { metafieldsDelete: { deletedMetafields: [], userErrors: [] } });
+    const out = await handleKitSettings(client, { intent: 'link', variantId: 'gid://shopify/ProductVariant/9', size: 12 });
+    expect(out).toEqual({ ok: true, message: 'Added 12 Bar Mini Sampler Box as a 12-bar kit.' });
+  });
+  it('rejects a bad link request without calling Shopify', async () => {
+    const client = fakeClient();
+    await expect(handleKitSettings(client, { intent: 'link', variantId: 'x', size: 12 })).resolves.toEqual({ ok: false, message: 'Choose the product to use as a kit.' });
+    expect(client.calls).toHaveLength(0);
+  });
   it('creates a kit', async () => {
     const client = fakeClient({ productVariants: { nodes: [] } }, created);
     const out = await handleKitSettings(client, { intent: 'create', title: 'New', size: 4, sku: 'N-4' });
