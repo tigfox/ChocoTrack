@@ -24,7 +24,7 @@ const browserErrors = [];
 let currentTest = '(setup)';
 
 const app = () => page.frames().find((f) => f !== page.mainFrame());
-const open = async (path) => {
+const open = async (path, { keepCollection = false } = {}) => {
   await page.bringToFront();
   await page.goto(`${BASE}/${path}`, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => document.querySelector('iframe'), null, { timeout: 30_000 });
@@ -33,11 +33,22 @@ const open = async (path) => {
   for (const selector of ready) await app().waitForSelector(selector, { state: 'attached', timeout: 30_000 });
   // The server-rendered HTML appears before React attaches its handlers; events sent too early are lost.
   await page.waitForTimeout(3_000);
-  if (path === 'assemble' || path === 'disassemble') await chooseLocation(STOCK_LOCATION);
+  if (path === 'assemble' || path === 'disassemble') {
+    await chooseLocation(STOCK_LOCATION);
+    // The picker remembers its last collection per browser, so start every test from the same place.
+    if (!keepCollection) await chooseCollection('Mini bars');
+  }
   // The Sampler Kits section folds away when kits exist; a fresh Chrome profile starts it closed.
   if (path === 'settings') await app().locator('summary', { hasText: 'Sampler Kits' }).evaluate((el) => (el.parentElement.open = true));
 };
 // The app opens on the first location; the minis are stocked at the Factory.
+const chooseCollection = async (title) => {
+  const select = app().locator('s-select[label="Collection"]');
+  const value = await optionValue(select, title);
+  if ((await select.evaluate((el) => el.value)) === value) return;
+  await setValue(select, value);
+  await page.waitForTimeout(1_000);
+};
 const chooseLocation = async (name) => {
   const select = app().locator('s-select[label="Location"]');
   const value = await optionValue(select, name);
@@ -147,7 +158,7 @@ describe('Collection filter', () => {
     await app().locator('s-select[label="Collection"] select').selectOption({ label: 'All items' });
     await page.waitForTimeout(1_000);
     assert.equal(await app().locator('s-select[label="Collection"]').evaluate((el) => el.value), 'none');
-    await open('assemble');
+    await open('assemble', { keepCollection: true });
     assert.equal(await app().locator('s-select[label="Collection"]').evaluate((el) => el.value), 'none');
     await app().locator('s-select[label="Collection"] select').selectOption({ label: 'Mini bars' });
   });
@@ -481,7 +492,8 @@ describe('Inventory: untracked variants', () => {
         el.dispatchEvent(new Event('change', { bubbles: true }));
       });
       await app().waitForFunction((n) => document.querySelectorAll('s-checkbox[label="Untracked"]').length === n - 1, before, { timeout: 20_000 });
-      assert.match(await text(), /Show untracked variants \(1\)/);
+      const filterLabel = () => app().locator('s-checkbox[label^="Show untracked variants"]').getAttribute('label'); // the count is in the label, not the page text
+      assert.equal(await filterLabel(), 'Show untracked variants (1)');
 
       await app().locator('s-checkbox[label^="Show untracked variants"]').evaluate((el) => {
         el.checked = true;
@@ -493,7 +505,7 @@ describe('Inventory: untracked variants', () => {
         off.checked = false;
         off.dispatchEvent(new Event('change', { bubbles: true }));
       });
-      await app().waitForFunction(() => /Show untracked variants \(0\)/.test(document.body.innerText), null, { timeout: 20_000 });
+      await app().waitForFunction(() => document.querySelector('s-checkbox[label^="Show untracked variants"]')?.getAttribute('label') === 'Show untracked variants (0)', null, { timeout: 20_000 });
     } finally {
       // Whatever happened, leave nothing switched off.
       await open('inventory');
