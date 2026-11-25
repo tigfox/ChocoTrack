@@ -65,7 +65,7 @@ Three to review: `Peach Ipa Dark Milk` (should read `Peach IPA`), `Peru 72` (no 
 | Mini Bars Box of 100 / 500 | n/a | bulk cartons, not assembled from mixed minis: out of scope |
 | Combos (`12 Bar Mini Sampler + …`) | n/a | contain other kits, not minis: out of scope |
 
-## Status (2026-11-25): complete and deployed
+## Status (2026-11-24): complete and deployed
 
 All eight steps are done and in production (PRs #19 to #28). Variant-level kit metafields; **Use an existing product as a kit**; importer collections, kits (`--kits`), flavor names and published flags (`--finish`); flavor display names with the category underneath; old seed scripts removed. Review findings (kit rename on edit, over-broad flavor humanizing, write order, link-modal state, importer `--confirm`) were fixed before merge. Follow-ups found by use and fixed: Add products list order and Show more (#20), unsaved-rows warning (#22), Pack Size groups replacing the by-name setting (#23), a crash when typing a pack size (#24), an Untracked checkbox per Inventory variant (#27).
 

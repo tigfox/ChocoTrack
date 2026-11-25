@@ -2,7 +2,7 @@
 
 A Shopify app that assembles "sampler kits" from mini chocolate bar inventory, using the Admin GraphQL [`InventoryItem`](https://shopify.dev/docs/api/admin-graphql/latest/objects/InventoryItem) and inventory adjustment APIs.
 
-## Status (2026-11-25)
+## Status (2026-11-24)
 
 ### Session handoff (read this first)
 
