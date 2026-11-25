@@ -2,11 +2,27 @@
 
 A Shopify app that assembles "sampler kits" from mini chocolate bar inventory, using the Admin GraphQL [`InventoryItem`](https://shopify.dev/docs/api/admin-graphql/latest/objects/InventoryItem) and inventory adjustment APIs.
 
-## Status (2026-11-24)
+## Status (2026-11-25)
+
+### Session handoff (read this first)
+
+**State:** everything from the 2026-11-24/25 session is merged to `main` (PRs #19 to #28) and **deployed** at `https://chocotrack.franson.nyc`. The only open PRs are four old Dependabot bumps (#13, #14, #15, #17; see "Security review"). Working tree clean; 731 unit tests, 22 browser tests passing against the deployed app.
+
+**What changed in this session** (details in `river_sea_refactor_plan.md` and `inventory_tracker.md`):
+- **River Sea product structure.** Mini categories are one product with a variant per flavor; kit size and category now live on the **variant**; Settings can **use an existing product as a kit**; flavors show friendly names with the category under them.
+- **Pack Size groups** replace the by-name "send in multiples of" (default 1, groups of variants with their own size; stored by variant id).
+- **Inventory:** per-variant **Untracked** checkbox (hidden, no alerts, no transfers, targets kept); a warning before "Done editing" drops unsaved rows; "Add products" is sorted by title with Show more.
+- **Dev tooling:** `scripts/import-river-sea.mjs` rebuilds a development store from the live-store exports (refuses non-dev stores, needs `--confirm=<store>` to delete); old seed scripts removed.
+- **Tests:** the browser suite runs against the deployed app (`APP_HANDLE=chocotrack-production npm run test:e2e`) and now **fails on JavaScript errors** it sees in the browser. Run it from a Chrome started with `--remote-debugging-port=9222` and a **separate profile**; do manual testing in a different window, because the Assemble picker remembers its collection per browser.
+
+**Next session starts with the live store.** The store team is working through `StoreTasks.pdf` (in `/Users/tigfox/Documents/River Sea/`, not in the repo): tracking and counts for the 27 mini flavors, tracking for 4 sampler products, collections, two SKU clean-ups. Then: install on the live store (custom distribution), first-time setup in the app, a careful first assemble/disassemble on real stock. Developer jobs still to do (not built): a **read-only live-store readiness check** (tracking on, collections present, SKUs unique, kits trackable) and a one-off to **apply the 25 flavor display names** to the live store (the importer refuses non-dev stores by design). Watch for: the pack size groups, Inventory targets and kits start **empty** on a new install.
+
+**Dev store (`creeklakeconfections`) as left:** River Sea catalog imported; minis 1500 each at Factory; 12-bar and 6-bar single-origin kits set up; **no pack size groups yet**; 29 products flagged for Inventory with targets for the 60g bars at Cafe and Market Store (set by hand during testing).
+
 
 **Built and working in the dev store (`creeklakeconfections`):** Assemble, Disassemble, Settings (kits and categories), search with collection filter, printable pick list, finished-box preview with product images, remembered location, kit and collection, and error handling for dropped connections and stale stock. The mockup is frozen.
 
-**Checks:** 658 unit and render tests (99% lines; gate is 80%), typecheck, lint and build clean, an opt-in live test against the dev store, and 19 browser tests (`npm run test:e2e`). CI on GitHub passes on every push to `main` with pinned action versions.
+**Checks:** 731 unit and render tests (99% lines; gate is 80%), typecheck, lint and build clean, an opt-in live test against the dev store (7 tests), and 22 browser tests (`npm run test:e2e`, which also fails on browser JavaScript errors). CI on GitHub passes on every push to `main` with pinned action versions.
 
 | Phase | State |
 |---|---|
@@ -18,9 +34,10 @@ A Shopify app that assembles "sampler kits" from mini chocolate bar inventory, u
 | Feedback round 2 (Settings page, kit categories) | Done |
 | Error and edge-case pass | Done |
 | 7 Deploy | **Live and hardened (2026-11-24).** `https://chocotrack.franson.nyc` on a 512 MB Ubuntu 26.04 Droplet (192.241.157.72), Let's Encrypt certificate, automatic builds from `main` and a gated deploy by image digest through a restricted SSH key. Production Shopify app "ChocoTrack Production" is released on the real hostname. The store owner tested Inventory, Assemble, Disassemble, Settings and printing on it in the dev store (all good). Left: store-team acceptance testing, custom distribution, a larger Droplet |
+| River Sea structure and Inventory follow-ups (2026-11-24 to 25) | **Done and deployed** (PRs #19 to #28): variant-level kits, link existing product as a kit, flavor names, Pack Size groups, Untracked switch, unsaved-rows warning, importer |
 | Security review | **Done 2026-11-23 to 24** (app code, CI/CD, host). Fixes shipped; deferred items are listed under "Security review" below |
 
-**Next, in order:** (1) **acceptance testing with the store team** on the production app (checklist in `inventory_tracker.md`); (2) after acceptance, set up **custom distribution** for the real store (Dev Dashboard, the app's Distribution page: enter the store's `.myshopify.com` domain, generate the install link, install as owner or staff who can install apps; the choice is one-way, so confirm the store first); (3) before real staff use, a Droplet with 1 GB or more RAM; (4) after acceptance, the deferred security items (second dev store to test cross-shop isolation live) and the held-back dependency upgrades (see "Security review"); (5) optional fake-Shopify browser suite in CI; (6) ask the store team whether the screens feel faster, then discuss deferred features; (7) **barcode sheet printing** (planned, with open questions, under "Future development").
+**Next, in order:** (1) **store-team tasks on the live store** (`StoreTasks.pdf`: tracking, counts, collections, SKU clean-ups); (2) **install on the live store** with custom distribution (Dev Dashboard, the app's Distribution page: enter the store's `.myshopify.com` domain, generate the install link, install as owner or staff who can install apps; the choice is one-way, so confirm the store first); (3) **first-time setup in the app** (kits, transfer sources, Pack Size groups, Inventory targets) and a careful first assemble then disassemble on real stock; (4) before real staff use, a Droplet with 1 GB or more RAM; (5) developer jobs: the read-only **live-store readiness check** and applying the **flavor display names** to the live store; (6) **barcode sheet printing** (planned; three questions for the owner under "Future development"); (7) the deferred security items (second dev store to test cross-shop isolation live) and the held-back dependency upgrades (see "Security review"); (8) optional fake-Shopify browser suite in CI; (9) ask the store team whether the screens feel faster, then discuss deferred features.
 
 ## Decisions
 
@@ -43,6 +60,8 @@ A Shopify app that assembles "sampler kits" from mini chocolate bar inventory, u
 | Hosting | **Initial: one small DigitalOcean Droplet** (Docker Compose, Caddy for HTTPS, SQLite sessions on disk; runbook in `deploy/droplet/`). May move to a larger platform (AWS, GCP, App Platform) if the app grows; the container stays portable (see Hosting). |
 | Kit settings | A Settings page lists the kits and edits name, size and optional category; it also creates kits. Price, SKU and barcode stay in Shopify. |
 | Kit category | Optional, one per kit, an existing store collection, kept in the `choco_track.category` metafield on the kit **variant**. Assembling or disassembling that kit starts the mini-bar list on it. With the River Sea data each mini category product has its own collection (`Limited Editions`, `Dark Milks`, `Rare`, ...) |
+| Pack sizes | A default (1) plus groups; each group has a pack size and the specific variants in it; a variant is in at most one group; nothing is matched by name. Stored by variant id with the app installation. Transfer suggestions round to whole packs. |
+| Untracked variants | A per-variant Untracked checkbox on Inventory (variant metafield `choco_track.untracked`): hidden by default, left out of alerts, the sidebar count and transfers; targets kept. |
 | Deferred | Lots and expiry dates, cost rollup, templates, audit/history UI. |
 
 ## Key design points
