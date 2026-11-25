@@ -67,7 +67,7 @@ Three to review: `Peach Ipa Dark Milk` (should read `Peach IPA`), `Peru 72` (no 
 
 ## Status (2026-11-24): steps 1-7 done on branch `feat/variant-level-kits`; step 8 (review, PR, deploy) is next
 
-Done: variant-level kit metafields; link an existing product as a kit; importer collections, kits (`--kits`), flavor names and published flags (`--finish` applies them to an imported store); flavor display names with the category under them; old seed scripts removed; live test updated and passing against the dev store (5/5); unit tests 658 passing. **Not run:** the 17 browser tests in `e2e/sampler.e2e.mjs`, which were updated to the new data but need a signed-in Chrome. Only 2 of the 6 kit candidates track inventory in the live store (12 Bar Mini Sampler Box, 6 Bar Single-Origin Select Box); the other 4 need tracking turned on in Shopify before they can be linked.
+Done: variant-level kit metafields; link an existing product as a kit; importer collections, kits (`--kits`), flavor names and published flags (`--finish` applies them to an imported store); flavor display names with the category under them; old seed scripts removed; live test updated and passing against the dev store (5/5); unit tests 658 passing. **Browser tests:** all 19 in `e2e/sampler.e2e.mjs` pass against the deployed app (`APP_HANDLE=chocotrack-production`), including new ones for the Add products list and the link-as-kit flow. Only 2 of the 6 kit candidates track inventory in the live store (12 Bar Mini Sampler Box, 6 Bar Single-Origin Select Box); the other 4 need tracking turned on in Shopify before they can be linked.
 
 ## Phases (TDD for every step: test first, then code, then review)
 
