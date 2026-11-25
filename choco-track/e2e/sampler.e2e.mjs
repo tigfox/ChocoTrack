@@ -5,7 +5,8 @@ import { after, before, describe, it } from 'node:test';
 import { chromium } from 'playwright-core';
 
 const CDP = process.env.CDP_URL ?? 'http://127.0.0.1:9222';
-const BASE = `https://admin.shopify.com/store/${process.env.LIVE_STORE_HANDLE ?? 'creeklakeconfections'}/apps/chocotrack/app`;
+// APP_HANDLE is the app's slug in the admin URL: chocotrack-production for the deployed app, chocotrack for `shopify app dev`.
+const BASE = `https://admin.shopify.com/store/${process.env.LIVE_STORE_HANDLE ?? 'creeklakeconfections'}/apps/${process.env.APP_HANDLE ?? 'chocotrack'}/app`;
 // Mini flavors are variants of the category products; names are the display names the importer writes.
 const FLAVORS = [
   { name: 'Bolivia 72%', sku: 'MIN-BOL-RAR' },
@@ -24,11 +25,14 @@ const open = async (path) => {
   await page.bringToFront();
   await page.goto(`${BASE}/${path}`, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => document.querySelector('iframe'), null, { timeout: 30_000 });
-  const ready = path === 'settings' ? ['s-select[label="Category"]'] : ['s-search-field', 's-button[accessibilitylabel^="Add one"]'];
+  const READY = { settings: ['s-select[label="Category"]'], inventory: ['s-page'] };
+  const ready = READY[path] ?? ['s-search-field', 's-button[accessibilitylabel^="Add one"]'];
   for (const selector of ready) await app().waitForSelector(selector, { state: 'attached', timeout: 30_000 });
   // The server-rendered HTML appears before React attaches its handlers; events sent too early are lost.
   await page.waitForTimeout(3_000);
   if (path === 'assemble' || path === 'disassemble') await chooseLocation(STOCK_LOCATION);
+  // The Sampler Kits section folds away when kits exist; a fresh Chrome profile starts it closed.
+  if (path === 'settings') await app().locator('summary', { hasText: 'Sampler Kits' }).evaluate((el) => (el.parentElement.open = true));
 };
 // The app opens on the first location; the minis are stocked at the Factory.
 const chooseLocation = async (name) => {
@@ -179,7 +183,7 @@ describe('Kit settings and categories', () => {
 
   it('shows each kit its real size', async () => {
     await open('settings');
-    const size = await card().locator('s-select[label="Kit size"]').evaluate((el) => el.value);
+    const size = await card().locator('s-number-field[label="Kit size"]').evaluate((el) => el.value);
     assert.equal(size, '6');
   });
 
@@ -358,5 +362,43 @@ describe('Inventory: unsaved edits', () => {
     await app().locator('s-button', { hasText: 'Discard changes' }).first().evaluate((el) => el.click());
     await app().waitForFunction(() => [...document.querySelectorAll('s-button')].some((b) => b.textContent.trim() === 'Edit targets'), null, { timeout: 15_000 });
     assert.doesNotMatch(await text(), /Saved targets/);
+  });
+});
+
+describe('Inventory: Add products', () => {
+  const trackButtons = () =>
+    app().evaluate(() => [...document.querySelectorAll('#add-products-modal s-button')].filter((b) => /^(Track|Stop tracking)$/.test(b.textContent.trim())).length);
+
+  it('lists products from every category by title, and Show more reaches the rest', async () => {
+    await open('inventory');
+    // Polaris reports header actions as hidden to Playwright, so click through the DOM.
+    await app().locator('s-button', { hasText: 'Add products' }).first().evaluate((el) => el.click());
+    await app().waitForFunction(() => /100% Cacao/.test(document.querySelector('#add-products-modal')?.textContent ?? ''), null, { timeout: 30_000 });
+    const first = await trackButtons();
+    assert.equal(first, 50, 'starts at 50 results');
+    const modalText = await app().locator('#add-products-modal').evaluate((el) => el.textContent);
+    assert.doesNotMatch(modalText, /Mini Bars - /, 'sorted by title, so the mini categories are not crowding the top');
+    await app().locator('#add-products-modal s-button', { hasText: 'Show more' }).first().evaluate((el) => el.click());
+    await app().waitForFunction(() => document.querySelectorAll('#add-products-modal s-button').length > 52, null, { timeout: 30_000 });
+    assert.ok((await trackButtons()) > first, 'Show more adds products');
+  });
+});
+
+describe('Settings: use an existing product as a kit', () => {
+  const modal = '#link-kit-modal';
+  it('pre-fills the size from the name, and refuses a product that does not track inventory', async () => {
+    await open('settings');
+    await app().locator('s-button', { hasText: 'Use an existing product as a kit' }).first().evaluate((el) => el.click());
+    await page.waitForTimeout(1_000);
+    await setValue(app().locator('s-text-field[label="Search by name, SKU or barcode"]'), '5 Bar Mini Pack');
+    await app().waitForFunction((m) => [...document.querySelectorAll(`${m} s-option`)].some((o) => /5 Bar Mini Pack/.test(o.textContent)), modal, { timeout: 30_000 });
+    const value = await app().locator(`${modal} s-select[label="Product"]`).evaluate((el) => [...el.querySelectorAll('s-option')].find((o) => /5 Bar Mini Pack/.test(o.textContent)).value);
+    await setValue(app().locator(`${modal} s-select[label="Product"]`), value);
+    await app().waitForFunction((m) => document.querySelector(`${m} s-number-field[label="Kit size (mini bars)"]`)?.value === '5', modal, { timeout: 15_000 });
+    // The 5 Bar Mini Pack is untracked in the live store, so linking it must be refused and change nothing.
+    await app().locator(`${modal} s-button`, { hasText: 'Use as kit' }).first().evaluate((el) => el.click());
+    await app().waitForFunction((m) => /inventory tracking/i.test(document.querySelector(m)?.textContent ?? ''), modal, { timeout: 30_000 });
+    assert.equal(await crashed(), false);
+    await app().locator(`${modal} s-button`, { hasText: 'Cancel' }).first().evaluate((el) => el.click());
   });
 });
