@@ -1,7 +1,7 @@
 // Click-through tests against a logged-in Chrome (see e2e/README.md). Net-zero on stock.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { after, before, describe, it } from 'node:test';
+import { after, before, beforeEach, describe, it } from 'node:test';
 import { chromium } from 'playwright-core';
 
 const CDP = process.env.CDP_URL ?? 'http://127.0.0.1:9222';
@@ -19,6 +19,9 @@ const KIT12_SKU = 'BAR-SAM-DML';
 
 let browser;
 let page;
+// Browser errors seen during the run (uncaught exceptions and console errors, from every frame), tagged with the test running.
+const browserErrors = [];
+let currentTest = '(setup)';
 
 const app = () => page.frames().find((f) => f !== page.mainFrame());
 const open = async (path) => {
@@ -64,10 +67,22 @@ const run = async (label) => {
 before(async () => {
   browser = await chromium.connectOverCDP(CDP);
   page = await browser.contexts()[0].newPage();
+  page.on('pageerror', (e) => browserErrors.push({ test: currentTest, kind: 'uncaught', text: `${e.name}: ${e.message}`.slice(0, 220) }));
+  page.on('console', (m) => m.type() === 'error' && browserErrors.push({ test: currentTest, kind: 'console', text: m.text().slice(0, 220) }));
+});
+beforeEach((t) => {
+  currentTest = t.name;
 });
 after(async () => {
+  // Network noise is reported only: the Shopify admin tries an old `shopify app dev` tunnel on every page, and the
+  // "Dropped connection" tests cut the network on purpose. A JavaScript error in the app fails the run.
+  const grouped = Map.groupBy(browserErrors, (e) => `${e.kind}: ${e.text}`);
+  console.log(`\nBrowser errors during the run: ${browserErrors.length} (${grouped.size} distinct)`);
+  for (const [text, list] of grouped) console.log(`  x${list.length} ${text}\n      in: ${[...new Set(list.map((e) => e.test))].join(' | ')}`);
   await page?.close();
   await browser?.close();
+  const scriptErrors = browserErrors.filter((e) => e.kind === 'uncaught' || /\b(TypeError|ReferenceError|RangeError)\b/.test(e.text));
+  assert.deepEqual(scriptErrors, [], `JavaScript errors in the browser:\n${scriptErrors.map((e) => `  ${e.text} (in: ${e.test})`).join('\n')}`);
 });
 
 describe('Assemble screen', () => {
