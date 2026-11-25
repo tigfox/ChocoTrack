@@ -3,7 +3,7 @@ import { numericId, sanitize } from './catalog';
 import type { GraphqlClient } from './client';
 import { assertNoUserErrors, ShopifyApiError, type UserError } from './errors';
 import { serializePackSizes, type PackSizes } from '../domain/packSizes';
-import { PACK_SIZES_METAFIELD, SOURCES_METAFIELD, TARGETS_METAFIELD, TRACKED_METAFIELD, TRANSFER_TAG } from './trackedCatalog';
+import { PACK_SIZES_METAFIELD, SOURCES_METAFIELD, TARGETS_METAFIELD, TRACKED_METAFIELD, TRANSFER_TAG, UNTRACKED_METAFIELD } from './trackedCatalog';
 
 const SET_METAFIELDS = `#graphql
   mutation SetMetafields($metafields: [MetafieldsSetInput!]!) {
@@ -51,6 +51,11 @@ const ensureFlagDefinition = async (client: GraphqlClient): Promise<void> => {
 export const setProductFlag = async (client: GraphqlClient, productId: string, tracked: boolean): Promise<void> => {
   if (tracked) await ensureFlagDefinition(client);
   await setMetafield(client, 'Flag product', { ownerId: productId, ...TRACKED_METAFIELD, type: 'boolean', value: String(tracked) });
+};
+
+/** Switches one variant off for the report, or back on. The variant keeps its targets, so switching it back on restores them. */
+export const setVariantUntracked = async (client: GraphqlClient, variantId: string, untracked: boolean): Promise<void> => {
+  await setMetafield(client, 'Switch variant tracking', { ownerId: variantId, ...UNTRACKED_METAFIELD, type: 'boolean', value: String(untracked) });
 };
 
 export interface TargetsSave {

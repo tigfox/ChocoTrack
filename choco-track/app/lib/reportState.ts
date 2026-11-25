@@ -16,6 +16,22 @@ export const withVariantTargets = (
       : p,
   );
 
+/** Switches one variant off (or back on, by dropping the flag). Its targets and digest are kept. */
+export const withVariantUntracked = (products: readonly ReportProduct[], variantId: string, untracked: boolean): readonly ReportProduct[] =>
+  products.map((p) =>
+    p.variants.some((v) => v.id === variantId)
+      ? {
+          ...p,
+          variants: p.variants.map((v) => {
+            if (v.id !== variantId) return v;
+            const copy = { ...v };
+            delete copy.untracked;
+            return untracked ? { ...copy, untracked: true } : copy;
+          }),
+        }
+      : p,
+  );
+
 export const upsertProduct = (products: readonly ReportProduct[], product: ReportProduct): readonly ReportProduct[] =>
   [...products.filter((p) => p.id !== product.id), product].sort((a, b) => a.title.localeCompare(b.title));
 

@@ -4,7 +4,7 @@ import type { Targets } from "../domain/targets";
 import type { InventoryResponse } from "../lib/handleInventory";
 import type { ReportRow } from "../lib/reportRows";
 import { draftsToTargets, sameTargets, targetsToDrafts, type Drafts } from "../lib/targetDrafts";
-import { fieldValue } from "../wc";
+import { fieldChecked, fieldValue } from "../wc";
 import { ReportCell } from "./ReportCell";
 
 interface Props {
@@ -17,6 +17,8 @@ interface Props {
   readonly onSave: (targets: Targets) => Promise<InventoryResponse>;
   /** Tells the page whether this row has edits that were not saved (only while editing). */
   readonly onDirty?: (variantId: string, dirty: boolean) => void;
+  /** Switches this variant off for the report (or back on) and saves it straight away. */
+  readonly onUntracked?: (untracked: boolean) => Promise<InventoryResponse>;
 }
 
 /** Hidden locations keep their targets: drafts cover every location the variant has a target at, visible or not. */
@@ -24,12 +26,13 @@ const draftIds = (row: ReportRow, locations: readonly Location[]): readonly stri
   ...new Set([...locations.map((l) => l.id), ...Object.keys(row.variant.targets)]),
 ];
 
-export function VariantRow({ row, productTitle, showProduct, locations, editing, onSave, onDirty }: Props) {
+export function VariantRow({ row, productTitle, showProduct, locations, editing, onSave, onDirty, onUntracked }: Props) {
   const { variant } = row;
   const ids = draftIds(row, locations);
   const [drafts, setDrafts] = useState<Drafts>(() => targetsToDrafts(variant.targets, ids));
   const [problem, setProblem] = useState<{ locationId?: string; message: string } | undefined>();
   const [saving, setSaving] = useState(false);
+  const [switching, setSwitching] = useState(false);
 
   // Start again from what Shopify holds when editing begins or after a save.
   useEffect(() => {
@@ -62,11 +65,21 @@ export function VariantRow({ row, productTitle, showProduct, locations, editing,
     if (!result.ok) setProblem({ message: result.message });
   };
 
+  const untracked = variant.untracked === true;
+  const switchTracking = async (off: boolean) => {
+    if (!onUntracked) return;
+    setSwitching(true);
+    setProblem(undefined);
+    const result = await onUntracked(off);
+    setSwitching(false);
+    if (!result.ok) setProblem({ message: result.message });
+  };
+
   const name = showProduct || row.label === "" ? productTitle : row.label;
   const detail = showProduct && row.label !== "" ? row.label : "";
 
   return (
-    <tr>
+    <tr style={untracked ? { opacity: 0.55 } : undefined}>
       <th scope="row" className="inv-sticky">
         <s-stack gap="none">
           <s-text type="strong">{name}</s-text>
@@ -77,6 +90,18 @@ export function VariantRow({ row, productTitle, showProduct, locations, editing,
               <s-button variant="primary" disabled={!dirty || saving} loading={saving} onClick={() => void save()}>Save</s-button>
               <s-button disabled={!dirty || saving} onClick={() => setDrafts(targetsToDrafts(variant.targets, ids))}>Reset</s-button>
             </s-stack>
+          )}
+          {onUntracked && (
+            <s-checkbox
+              label="Untracked"
+              details={untracked ? "Hidden and not alerted on." : undefined}
+              checked={untracked}
+              disabled={switching}
+              onChange={(e) => {
+                const off = fieldChecked(e); // read now: the event is gone by the time React runs any updater
+                void switchTracking(off);
+              }}
+            />
           )}
           {problem && !problem.locationId && <s-text tone="critical">{problem.message}</s-text>}
         </s-stack>

@@ -13,6 +13,14 @@ const product: ReportProduct = {
   ],
 };
 
+describe('planTransfers and untracked variants', () => {
+  it('leaves an untracked variant out, even though it has targets', () => {
+    const levels = { mini: { [W]: { available: 80, incoming: 0 }, [M]: { available: 4, incoming: 0 } } };
+    const off = { ...product, variants: [{ ...product.variants[0]!, untracked: true }, product.variants[1]!] };
+    expect(planTransfers({ products: [off], levels, pending: {}, sourceIds: [W], locations: [{ id: W }, { id: M }] }).transfers).toEqual([]);
+  });
+});
+
 describe('planTransfers', () => {
   it('plans for tracked variants only (those with targets)', () => {
     const levels = { mini: { [W]: { available: 80, incoming: 0 }, [M]: { available: 4, incoming: 0 } }, full: { [W]: { available: 80, incoming: 0 }, [M]: { available: 0, incoming: 0 } } };

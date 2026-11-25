@@ -1,6 +1,6 @@
 import { packSizeFor, type PackSizes } from '../domain/packSizes';
 import { suggestTransfers, type SuggestResult } from '../domain/suggest';
-import { hasTargets, type LevelMap, type PendingMap } from '../domain/tracking';
+import { isMonitored, type LevelMap, type PendingMap } from '../domain/tracking';
 import type { ReportProduct } from '../shopify/trackedCatalog';
 
 export interface PlanInput {
@@ -16,7 +16,7 @@ export interface PlanInput {
 /** Suggested transfers for what the report shows; the server runs the same function on fresh data before creating anything. */
 export const planTransfers = ({ products, levels, pending, sourceIds, locations, packSizes }: PlanInput): SuggestResult =>
   suggestTransfers({
-    variants: products.flatMap((p) => p.variants).filter(hasTargets),
+    variants: products.flatMap((p) => p.variants).filter(isMonitored),
     levels,
     pending,
     sourceIds,

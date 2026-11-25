@@ -10,6 +10,8 @@ import { listLocations } from './locations';
 
 /** Product metafield: true marks the product for the Inventory report. Searchable, so it lives on the product. */
 export const TRACKED_METAFIELD = { namespace: 'choco_track', key: 'tracked' } as const;
+/** Variant metafield: true switches the variant off for the report (not shown, no alerts, no transfers); its targets are kept. */
+export const UNTRACKED_METAFIELD = { namespace: 'choco_track', key: 'untracked' } as const;
 /** Variant metafield: JSON of per-location min/max targets. A variant with any target is tracked. */
 export const TARGETS_METAFIELD = { namespace: 'choco_track', key: 'targets' } as const;
 /** App-owned metadata on the app installation: ordered ids of the locations that supply transfers. */
@@ -91,6 +93,7 @@ const PRODUCTS_QUERY = `#graphql
             image { url }
             inventoryItem { id }
             targets: metafield(namespace: "${TARGETS_METAFIELD.namespace}", key: "${TARGETS_METAFIELD.key}") { value compareDigest }
+            untracked: metafield(namespace: "${UNTRACKED_METAFIELD.namespace}", key: "${UNTRACKED_METAFIELD.key}") { value }
           }
           pageInfo { hasNextPage }
         }
@@ -111,6 +114,7 @@ interface ProductNode {
       readonly image: { readonly url: string } | null;
       readonly inventoryItem: { readonly id: string };
       readonly targets: { readonly value: string; readonly compareDigest: string | null } | null;
+      readonly untracked?: { readonly value: string } | null;
     }>;
     readonly pageInfo: { readonly hasNextPage: boolean };
   };
@@ -135,6 +139,7 @@ const toProduct = (node: ProductNode & { id: string }): ReportProduct => {
         inventoryItemId: v.inventoryItem.id,
         targets: parseTargets(v.targets?.value),
         digest: v.targets?.compareDigest ?? null,
+        ...(v.untracked?.value === 'true' ? { untracked: true } : {}),
       };
     }),
   };

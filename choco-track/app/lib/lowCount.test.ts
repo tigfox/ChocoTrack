@@ -46,3 +46,15 @@ describe('computeLowCount', () => {
     expect(computeLowCount({ ...report, levels: { a: { L: { available: 12, incoming: 0 } } } })).toBe(0);
   });
 });
+
+describe('computeLowCount and untracked variants', () => {
+  it('does not count an untracked variant that is low', () => {
+    const product: ReportProduct = {
+      id: 'p',
+      title: 'Rum',
+      truncated: false,
+      variants: [{ id: 'a', productId: 'p', productTitle: 'Rum', title: 'Mini', sku: 'a', inventoryItemId: 'ia', digest: null, targets: { L: { min: 10, max: 20 } }, untracked: true }],
+    };
+    expect(computeLowCount({ products: [product], levels: { a: { L: { available: 0, incoming: 0 } } }, pending: {} })).toBe(0);
+  });
+});

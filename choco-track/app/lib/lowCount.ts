@@ -1,4 +1,4 @@
-import { hasTargets, lowSummary, type LevelMap, type PendingMap } from '../domain/tracking';
+import { isMonitored, lowSummary, type LevelMap, type PendingMap } from '../domain/tracking';
 import type { ReportProduct } from '../shopify/trackedCatalog';
 
 /** The sidebar count is looked up on every page view, so it is kept briefly rather than re-read each time. */
@@ -21,4 +21,4 @@ export const forgetLowCount = (shop: string): void => {
 
 /** Tracked variants that are below their minimum at some location. */
 export const computeLowCount = (report: { products: readonly ReportProduct[]; levels: LevelMap; pending: PendingMap }): number =>
-  lowSummary(report.products.flatMap((p) => p.variants).filter(hasTargets), report.levels, report.pending).variants;
+  lowSummary(report.products.flatMap((p) => p.variants).filter(isMonitored), report.levels, report.pending).variants;

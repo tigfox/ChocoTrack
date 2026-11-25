@@ -89,3 +89,42 @@ describe('limitGroups', () => {
     expect(limitGroups(groups, 0)).toEqual([]);
   });
 });
+
+describe('untracked variants', () => {
+  const withUntracked: ReportProduct[] = [
+    {
+      id: 'p1',
+      title: 'Rum Caramel',
+      truncated: false,
+      variants: [
+        v('mini', 'Mini', 'RUM-M', { [W]: { min: 100, max: 300 } }),
+        { ...v('full', 'Full', 'RUM-F', { [W]: { min: 5, max: 9 } }), untracked: true },
+        { ...v('half', 'Half', 'RUM-H', {}), untracked: true },
+        v('quarter', 'Quarter', 'RUM-Q', {}),
+      ],
+    },
+  ];
+  const run = (over: Partial<RowFilters> = {}) =>
+    buildReportGroups({ products: withUntracked, levels: { full: { [W]: { available: 1, incoming: 0 } } }, pending: {}, locationIds: [W], filters: { ...base, ...over } });
+
+  it('hides untracked variants by default, whether or not they have targets', () => {
+    expect(run().groups.flatMap((g) => g.rows.map((r) => r.label))).toEqual(['Mini']);
+  });
+  it('shows them when asked, so the switch can be undone', () => {
+    expect(run({ showUntracked: true }).groups.flatMap((g) => g.rows.map((r) => r.label))).toEqual(['Mini', 'Full', 'Half']);
+  });
+  it('keeps untargeted variants behind their own switch, independent of untracked ones', () => {
+    expect(run({ showUntargeted: true }).groups.flatMap((g) => g.rows.map((r) => r.label))).toEqual(['Mini', 'Quarter']);
+  });
+  it('counts what each switch would reveal, without double counting', () => {
+    const r = run();
+    expect(r.hiddenUntargeted).toBe(1); // Quarter only: untracked variants are not "waiting for targets"
+    expect(r.hiddenUntracked).toBe(2);
+  });
+  it('low only never lists an untracked variant, even when it is low', () => {
+    expect(run({ lowOnly: true, showUntracked: true }).groups.flatMap((g) => g.rows.map((r) => r.label))).not.toContain('Full');
+  });
+  it('still applies the search to untracked variants that are shown', () => {
+    expect(run({ showUntracked: true, search: 'half' }).groups.flatMap((g) => g.rows.map((r) => r.label))).toEqual(['Half']);
+  });
+});

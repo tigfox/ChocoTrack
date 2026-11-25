@@ -55,6 +55,18 @@ export const parseTargetsInput = (raw: unknown): Parsed<TargetsInput> => {
   return { ok: true, value: { variantId: body.variantId, targets: result, digest } };
 };
 
+export interface UntrackedInput {
+  readonly variantId: string;
+  readonly untracked: boolean;
+}
+
+/** Switch one variant off or back on for the report. */
+export const parseUntrackedInput = (raw: unknown): Parsed<UntrackedInput> => {
+  const body = record(raw);
+  if (!body || !isVariantGid(body.variantId) || typeof body.untracked !== 'boolean') return fail();
+  return { ok: true, value: { variantId: body.variantId, untracked: body.untracked } };
+};
+
 export const parseSourcesInput = (raw: unknown): Parsed<{ sourceIds: readonly string[] }> => {
   const ids = record(raw)?.sourceIds;
   if (!Array.isArray(ids) || ids.length > MAX_SOURCES || !ids.every(isLocationGid) || new Set(ids).size !== ids.length) return fail();

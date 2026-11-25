@@ -87,6 +87,23 @@ describe("InventoryTable", () => {
   });
 });
 
+describe("InventoryTable untracked switch", () => {
+  const off = { ...products[0]!, variants: [{ ...products[0]!.variants[0]!, untracked: true }, products[0]!.variants[1]!] };
+  const rows = (list: ReportProduct[], showUntracked: boolean) =>
+    buildReportGroups({ products: list, levels, pending: {}, locationIds: [W, M], filters: { search: "", lowOnly: false, showUntargeted: false, showUntracked } }).groups;
+  it("puts an Untracked checkbox on every variant row, checked for an untracked one", () => {
+    const html = renderToStaticMarkup(<InventoryTable groups={rows([off], true)} locations={locations} editing={false} onSave={noop} onUntracked={noop} />);
+    expect(html.match(/label="Untracked"/g)).toHaveLength(2); // Mini (switched off, shown on request) and Full
+    expect(html.match(/<s-checkbox[^>]*label="Untracked"[^>]*checked/g)).toHaveLength(1); // only Mini is checked
+    expect(html).toContain("opacity");
+  });
+  it("leaves it unchecked for a tracked variant", () => {
+    const html = renderToStaticMarkup(<InventoryTable groups={groups()} locations={locations} editing={false} onSave={noop} onUntracked={noop} />);
+    expect(html).toContain('label="Untracked"');
+    expect(html).not.toMatch(/<s-checkbox[^>]*label="Untracked"[^>]*checked/);
+  });
+});
+
 describe("SuggestedTransfersModal", () => {
   const variants = products.flatMap((p) => p.variants);
   const plan = suggestTransfers({

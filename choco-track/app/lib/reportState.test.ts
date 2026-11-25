@@ -1,4 +1,4 @@
-import { addPending, mergeLevels, reconcileProducts, removeProduct, upsertProduct, withVariantTargets } from './reportState';
+import { addPending, mergeLevels, reconcileProducts, removeProduct, upsertProduct, withVariantTargets, withVariantUntracked } from './reportState';
 import type { ReportProduct } from '../shopify/trackedCatalog';
 
 const variant = (id: string) => ({ id, productId: 'p', productTitle: 'P', title: 'Mini', sku: id, inventoryItemId: `i-${id}`, digest: null, targets: {} });
@@ -73,5 +73,25 @@ describe('reconcileProducts', () => {
   });
   it('ignores an on-override for a product that is gone locally', () => {
     expect(reconcileProducts(server, [], { p9: true }).map((p) => p.id)).toEqual(['p1', 'p2']);
+  });
+});
+
+describe('withVariantUntracked', () => {
+  const products = Object.freeze([product('p1', 'A', 'v1', 'v2'), product('p2', 'B', 'v3')]);
+  it('switches one variant off without touching the rest or the original', () => {
+    const next = withVariantUntracked(products, 'v2', true);
+    expect(next[0]?.variants[1]).toMatchObject({ id: 'v2', untracked: true });
+    expect(next[0]?.variants[0]).toBe(products[0]?.variants[0]);
+    expect(next[1]).toBe(products[1]);
+    expect(products[0]?.variants[1]).not.toHaveProperty('untracked');
+  });
+  it('switches it back on by dropping the flag, keeping its targets and digest', () => {
+    const off = withVariantUntracked(withVariantTargets(products, 'v2', { L: { min: 1, max: 2 } }, 'dg'), 'v2', true);
+    const on = withVariantUntracked(off, 'v2', false);
+    expect(on[0]?.variants[1]).toMatchObject({ targets: { L: { min: 1, max: 2 } }, digest: 'dg' });
+    expect(on[0]?.variants[1]).not.toHaveProperty('untracked');
+  });
+  it('is a no-op for an unknown variant', () => {
+    expect(withVariantUntracked(products, 'zzz', true)).toEqual(products);
   });
 });

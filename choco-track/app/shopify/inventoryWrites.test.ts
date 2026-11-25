@@ -3,6 +3,7 @@ import {
   buildProductQuery,
   createDraftTransfer,
   savePackSizes,
+  setVariantUntracked,
   saveSourceIds,
   saveVariantTargets,
   searchProductsForFlag,
@@ -14,6 +15,26 @@ const M = 'gid://shopify/Location/2';
 const defined = { metafieldDefinitionCreate: { createdDefinition: { id: 'd' }, userErrors: [] } };
 const taken = { metafieldDefinitionCreate: { createdDefinition: null, userErrors: [{ message: 'in use', code: 'TAKEN' }] } };
 const setOk = (digest: string | null = 'dg') => ({ metafieldsSet: { metafields: [{ key: 'k', compareDigest: digest }], userErrors: [] } });
+
+describe('setVariantUntracked', () => {
+  it('stores the switch on the variant as a boolean metafield', async () => {
+    const client = fakeClient(setOk());
+    await setVariantUntracked(client, 'gid://shopify/ProductVariant/1', true);
+    expect(client.calls[0]?.variables).toEqual({
+      metafields: [{ ownerId: 'gid://shopify/ProductVariant/1', namespace: 'choco_track', key: 'untracked', type: 'boolean', value: 'true' }],
+    });
+    await setVariantUntracked(fakeClient(setOk()), 'gid://shopify/ProductVariant/1', false);
+  });
+  it('writes false to switch it back on', async () => {
+    const client = fakeClient(setOk());
+    await setVariantUntracked(client, 'gid://shopify/ProductVariant/1', false);
+    expect(client.calls[0]?.variables).toMatchObject({ metafields: [{ value: 'false' }] });
+  });
+  it('surfaces user errors', async () => {
+    const bad = { metafieldsSet: { metafields: [], userErrors: [{ message: 'Nope' }] } };
+    await expect(setVariantUntracked(fakeClient(bad), 'gid://shopify/ProductVariant/1', true)).rejects.toThrow('Nope');
+  });
+});
 
 describe('setProductFlag', () => {
   it('creates a searchable definition, then sets the flag', async () => {

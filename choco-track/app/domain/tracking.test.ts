@@ -1,4 +1,4 @@
-import { cellView, hasTargets, lowSummary, productsWithoutTargets, type FlaggedProduct, type TrackedVariant } from './tracking';
+import { cellView, hasTargets, isMonitored, isUntracked, lowSummary, productsWithoutTargets, type FlaggedProduct, type TrackedVariant } from './tracking';
 
 const W = 'gid://shopify/Location/1';
 const M = 'gid://shopify/Location/2';
@@ -86,5 +86,32 @@ describe('hasTargets', () => {
   it('is true once any location has a target', () => {
     expect(hasTargets({ targets: {} })).toBe(false);
     expect(hasTargets({ targets: { [W]: { min: 0, max: 1 } } })).toBe(true);
+  });
+});
+
+describe('isUntracked / isMonitored', () => {
+  const targets = { [W]: { min: 1, max: 2 } };
+  it('an untracked variant is not monitored, even with targets', () => {
+    expect(isUntracked({ untracked: true })).toBe(true);
+    expect(isUntracked({})).toBe(false);
+    expect(isUntracked({ untracked: false })).toBe(false);
+    expect(isMonitored({ targets, untracked: true })).toBe(false);
+  });
+  it('is monitored once it has targets and is not switched off', () => {
+    expect(isMonitored({ targets })).toBe(true);
+    expect(isMonitored({ targets: {} })).toBe(false);
+  });
+});
+
+describe('productsWithoutTargets and untracked variants', () => {
+  const t = { [W]: { min: 1, max: 2 } };
+  it('does not nag about a product whose variants are all untracked', () => {
+    expect(productsWithoutTargets([{ id: 'p', title: 'P', variants: [{ targets: {}, untracked: true }, { targets: {}, untracked: true }] }])).toEqual([]);
+  });
+  it('ignores untracked variants when looking for targets', () => {
+    // the only variant with targets is untracked, the other has none: the product still needs targets
+    expect(productsWithoutTargets([{ id: 'p', title: 'P', variants: [{ targets: {} }, { targets: t, untracked: true }] }])).toEqual([{ id: 'p', title: 'P' }]);
+    // an untracked variant without targets does not stop the product counting as covered
+    expect(productsWithoutTargets([{ id: 'p', title: 'P', variants: [{ targets: {}, untracked: true }, { targets: t }] }])).toEqual([]);
   });
 });
