@@ -60,7 +60,10 @@ export function PackSizeCard({ packSizes, labels: initialLabels, collections }: 
           min={1}
           max={1000}
           value={draft.defaultSize}
-          onInput={(e) => setDraft((d) => ({ ...d, defaultSize: fieldValue(e) }))}
+          onInput={(e) => {
+            const defaultSize = fieldValue(e); // read now: the event is gone by the time React runs the updater below
+            setDraft((d) => ({ ...d, defaultSize }));
+          }}
         />
         {draft.groups.length === 0 && <s-text color="subdued">No groups: every variant uses the default.</s-text>}
         {draft.groups.map((g, i) => (
@@ -73,7 +76,10 @@ export function PackSizeCard({ packSizes, labels: initialLabels, collections }: 
                     min={1}
                     max={1000}
                     value={g.size}
-                    onInput={(e) => setDraft((d) => setGroupSize(d, i, fieldValue(e)))}
+                    onInput={(e) => {
+                      const size = fieldValue(e);
+                      setDraft((d) => setGroupSize(d, i, size));
+                    }}
                   />
                   <s-text color="subdued">{`${g.variantIds.length} variant${g.variantIds.length === 1 ? "" : "s"}`}</s-text>
                 </s-stack>

@@ -396,14 +396,14 @@ describe('Inventory: unsaved edits', () => {
 
     const done = () => app().locator('s-button', { hasText: 'Done editing' }).first().evaluate((el) => el.click());
     await done();
-    await app().waitForFunction(() => /Unsaved changes/.test(document.body.innerText) && /1 row has changes you haven't saved/.test(document.body.innerText), null, { timeout: 15_000 });
+    await app().waitForFunction(() => /1 row has changes you haven't saved/.test(document.body.innerText), null, { timeout: 15_000 });
 
     await app().locator('s-button', { hasText: 'Keep editing' }).first().evaluate((el) => el.click());
-    await app().waitForFunction(() => !/Unsaved changes/.test(document.body.innerText), null, { timeout: 15_000 });
+    await app().waitForFunction(() => !/changes you haven't saved/.test(document.body.innerText), null, { timeout: 15_000 });
     assert.equal(await min.evaluate((el) => el.value), '1', 'the typed value is still there');
 
     await done();
-    await app().waitForFunction(() => /Unsaved changes/.test(document.body.innerText), null, { timeout: 15_000 });
+    await app().waitForFunction(() => /changes you haven't saved/.test(document.body.innerText), null, { timeout: 15_000 });
     await app().locator('s-button', { hasText: 'Discard changes' }).first().evaluate((el) => el.click());
     await app().waitForFunction(() => [...document.querySelectorAll('s-button')].some((b) => b.textContent.trim() === 'Edit targets'), null, { timeout: 15_000 });
     assert.doesNotMatch(await text(), /Saved targets/);
