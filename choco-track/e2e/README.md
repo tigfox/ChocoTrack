@@ -8,3 +8,5 @@ Click-through tests of the embedded screens. They attach to a Chrome you start a
 4. `APP_HANDLE=chocotrack-production npm run test:e2e`
 
 They run against the dev store and are net-zero on stock (assemble, then disassemble). Not run in CI.
+
+The run also records the browser's uncaught exceptions and console errors and prints them grouped at the end. A JavaScript error (uncaught, TypeError, ReferenceError, RangeError) fails the run; network noise (the admin's old dev-tunnel WebSocket, and the connection resets the "Dropped connection" tests cause on purpose) is only reported.
