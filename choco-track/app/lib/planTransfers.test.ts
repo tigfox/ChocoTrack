@@ -20,13 +20,14 @@ describe('planTransfers', () => {
     expect(plan.transfers).toEqual([{ originId: W, destinationId: M, lines: [{ variantId: 'mini', quantity: 26 }] }]);
   });
 
-  it('ships each variant in its own pack size, by variant name', () => {
+  it('ships each variant in the pack size of its group, and the default for the rest', () => {
     const levels = { mini: { [W]: { available: 900, incoming: 0 }, [M]: { available: 4, incoming: 0 } } };
     const wide = { ...product, variants: [{ ...product.variants[0]!, targets: { [W]: { min: 0, max: 1000 }, [M]: { min: 10, max: 330 } } }] };
-    const plan = (multiples: { fallback: number; byName: Record<string, number> }) =>
-      planTransfers({ products: [wide], levels, pending: {}, sourceIds: [W], locations: [{ id: W }, { id: M }], multiples }).transfers[0]?.lines[0]?.quantity;
-    expect(plan({ fallback: 5, byName: { mini: 100 } })).toBe(300); // need 326
-    expect(plan({ fallback: 5, byName: {} })).toBe(325);
+    const plan = (packSizes: { defaultSize: number; groups: { size: number; variantIds: string[] }[] }) =>
+      planTransfers({ products: [wide], levels, pending: {}, sourceIds: [W], locations: [{ id: W }, { id: M }], packSizes }).transfers[0]?.lines[0]?.quantity;
+    expect(plan({ defaultSize: 5, groups: [{ size: 100, variantIds: ['mini'] }] })).toBe(300); // need 326
+    expect(plan({ defaultSize: 5, groups: [{ size: 100, variantIds: ['other'] }] })).toBe(325);
+    expect(plan({ defaultSize: 1, groups: [] })).toBe(326);
   });
 
   it('does not round when no pack sizes are given', () => {

@@ -3,7 +3,7 @@
 import { execFileSync } from 'node:child_process';
 import { listCollections, listKits, searchVariants } from './catalog';
 import { createKit } from './kits';
-import { findFlaggedProductIds, loadInventoryReport, loadProducts, loadLevels } from './trackedCatalog';
+import { findFlaggedProductIds, loadInventoryReport, loadLevels, loadProducts, loadTransferSettings } from './trackedCatalog';
 import { saveVariantTargets, searchProductsForFlag, setProductFlag } from './inventoryWrites';
 import type { GraphqlClient } from './client';
 import { ShopifyApiError } from './errors';
@@ -11,6 +11,8 @@ import { loadStock } from './inventory';
 import type { StockMap } from '../domain/types';
 import { listLocations } from './locations';
 import { handleRun } from '../lib/handleRun';
+import { handleInventory } from '../lib/handleInventory';
+import { loadVariantLabels } from './variantLabels';
 
 const store = process.env.LIVE_STORE;
 
@@ -170,6 +172,24 @@ describe.skipIf(!store)('live dev store', () => {
       await setProductFlag(cliClient, candidate.id, wasTracked);
     }
   }, 240_000);
+
+  // Pack sizes: save a group holding a mini, read it back as Settings does (ids and names), then restore the default.
+  it('saves a pack size group, reads it back with names, and restores the default', async () => {
+    const mini = (await searchVariants(cliClient, { text: 'MIN-BOL-RAR' })).variants[0];
+    if (!mini) throw new Error('seed data missing');
+    const before = (await loadTransferSettings(cliClient)).packSizes;
+    try {
+      const saved = await handleInventory(cliClient, { intent: 'savePackSizes', defaultSize: 1, groups: [{ size: 100, variantIds: [mini.id] }] });
+      expect(saved).toMatchObject({ ok: true });
+      const { packSizes } = await loadTransferSettings(cliClient);
+      expect(packSizes).toEqual({ defaultSize: 1, groups: [{ size: 100, variantIds: [mini.id] }] });
+      const labels = await loadVariantLabels(cliClient, [mini.id]);
+      expect(labels[mini.id]).toMatchObject({ title: 'Bolivia 72%', sku: 'MIN-BOL-RAR', group: 'Rare' });
+    } finally {
+      await handleInventory(cliClient, { intent: 'savePackSizes', defaultSize: before.defaultSize, groups: before.groups });
+    }
+    expect((await loadTransferSettings(cliClient)).packSizes).toEqual(before);
+  }, 120_000);
 
   // Shopify rejects queries over a cost limit; this reads a full batch (10 products, 25 variants) to prove it fits.
   it('reads a full batch of products and variants within Shopify\'s query cost limit', async () => {

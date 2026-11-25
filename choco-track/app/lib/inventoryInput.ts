@@ -1,4 +1,4 @@
-import { nameKey, validateMultiple, type Multiples } from '../domain/multiples';
+import { MAX_PACK_GROUPS, MAX_PACK_VARIANTS, validatePackSize, type PackGroup, type PackSizes } from '../domain/packSizes';
 import { setTarget, validateTarget, type Targets } from '../domain/targets';
 import { isLocationGid, isProductGid, isVariantGid } from './shopifyIds';
 
@@ -7,8 +7,6 @@ export type Parsed<T> = { readonly ok: true; readonly value: T } | { readonly ok
 const INVALID = 'Invalid request.';
 const MAX_LOCATIONS = 50;
 const MAX_SOURCES = 20;
-const MAX_OVERRIDES = 50;
-const MAX_NAME = 60;
 const MAX_DIGEST = 200;
 const MIN_KEY = 8;
 const MAX_KEY = 64;
@@ -63,24 +61,28 @@ export const parseSourcesInput = (raw: unknown): Parsed<{ sourceIds: readonly st
   return { ok: true, value: { sourceIds: ids } };
 };
 
-/** Default pack size plus overrides by variant name. Names are normalised, so " Mini" and "mini" are the same entry. */
-export const parseMultiplesInput = (raw: unknown): Parsed<{ multiples: Multiples }> => {
+/** The default pack size plus groups of variants that ship in other sizes. A variant may be in only one group. */
+export const parsePackSizesInput = (raw: unknown): Parsed<{ packSizes: PackSizes }> => {
   const body = record(raw);
-  const list = body?.overrides;
-  if (!body || typeof body.fallback !== 'number' || !Array.isArray(list) || list.length > MAX_OVERRIDES) return fail();
-  const problem = validateMultiple(body.fallback);
+  if (!body || typeof body.defaultSize !== 'number' || !Array.isArray(body.groups) || body.groups.length > MAX_PACK_GROUPS) return fail();
+  const problem = validatePackSize(body.defaultSize);
   if (problem) return fail(problem);
-  let byName: Record<string, number> = {};
-  for (const item of list) {
-    const entry = record(item);
-    if (!entry || typeof entry.name !== 'string' || typeof entry.multiple !== 'number') return fail();
-    const key = nameKey(entry.name);
-    if (key === '' || key.length > MAX_NAME || key in byName) return fail();
-    const bad = validateMultiple(entry.multiple);
+  const seen = new Set<string>();
+  let groups: PackGroup[] = [];
+  for (const item of body.groups) {
+    const group = record(item);
+    if (!group || typeof group.size !== 'number' || !Array.isArray(group.variantIds)) return fail();
+    const bad = validatePackSize(group.size);
     if (bad) return fail(bad);
-    byName = { ...byName, [key]: entry.multiple };
+    if (!group.variantIds.every(isVariantGid)) return fail();
+    for (const id of group.variantIds as string[]) {
+      if (seen.has(id)) return fail('A variant can be in only one pack size group.');
+      seen.add(id);
+    }
+    groups = [...groups, { size: group.size, variantIds: group.variantIds as string[] }];
   }
-  return { ok: true, value: { multiples: { fallback: body.fallback, byName } } };
+  if (seen.size > MAX_PACK_VARIANTS) return fail();
+  return { ok: true, value: { packSizes: { defaultSize: body.defaultSize, groups } } };
 };
 
 export interface TransferInput {

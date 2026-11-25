@@ -1,4 +1,4 @@
-import { parseFlagInput, parseMultiplesInput, parseSourcesInput, parseTargetsInput, parseTransferInput } from './inventoryInput';
+import { parseFlagInput, parsePackSizesInput, parseSourcesInput, parseTargetsInput, parseTransferInput } from './inventoryInput';
 
 const P = 'gid://shopify/Product/1';
 const V = 'gid://shopify/ProductVariant/2';
@@ -56,26 +56,32 @@ describe('parseSourcesInput', () => {
   );
 });
 
-describe('parseMultiplesInput', () => {
-  const ok = { fallback: 5, overrides: [{ name: ' Mini ', multiple: 100 }] };
-  it('accepts a default and overrides by variant name, normalising the names', () => {
-    expect(parseMultiplesInput(ok)).toEqual({ ok: true, value: { multiples: { fallback: 5, byName: { mini: 100 } } } });
-    expect(parseMultiplesInput({ fallback: 1, overrides: [] })).toEqual({ ok: true, value: { multiples: { fallback: 1, byName: {} } } });
+describe('parsePackSizesInput', () => {
+  const V = (n: number) => `gid://shopify/ProductVariant/${n}`;
+  const ok = { defaultSize: 1, groups: [{ size: 5, variantIds: [V(1), V(2)] }, { size: 100, variantIds: [V(3)] }] };
+  it('accepts a default and groups of variants', () => {
+    expect(parsePackSizesInput(ok)).toEqual({ ok: true, value: { packSizes: ok } });
+    expect(parsePackSizesInput({ defaultSize: 12, groups: [] })).toEqual({ ok: true, value: { packSizes: { defaultSize: 12, groups: [] } } });
   });
   it('gives the same messages as the screen for bad numbers', () => {
-    expect(parseMultiplesInput({ ...ok, fallback: 0 })).toEqual({ ok: false, error: 'Enter a whole number from 1 to 1000.' });
-    expect(parseMultiplesInput({ fallback: 5, overrides: [{ name: 'mini', multiple: 2.5 }] })).toEqual({ ok: false, error: 'Enter a whole number from 1 to 1000.' });
+    expect(parsePackSizesInput({ ...ok, defaultSize: 0 })).toEqual({ ok: false, error: 'Enter a whole number from 1 to 1000.' });
+    expect(parsePackSizesInput({ defaultSize: 1, groups: [{ size: 2.5, variantIds: [] }] })).toEqual({ ok: false, error: 'Enter a whole number from 1 to 1000.' });
+  });
+  it('refuses a variant listed in two groups, with a clear message', () => {
+    const twice = { defaultSize: 1, groups: [{ size: 5, variantIds: [V(1)] }, { size: 7, variantIds: [V(1)] }] };
+    expect(parsePackSizesInput(twice)).toEqual({ ok: false, error: 'A variant can be in only one pack size group.' });
   });
   it.each([
     ['not an object', 'x'],
-    ['no default', { overrides: [] }],
-    ['no list', { fallback: 5 }],
-    ['a name that is not text', { fallback: 5, overrides: [{ name: 1, multiple: 5 }] }],
-    ['an empty name', { fallback: 5, overrides: [{ name: '  ', multiple: 5 }] }],
-    ['a long name', { fallback: 5, overrides: [{ name: 'x'.repeat(61), multiple: 5 }] }],
-    ['the same name twice', { fallback: 5, overrides: [{ name: 'Mini', multiple: 5 }, { name: ' mini', multiple: 10 }] }],
-    ['too many overrides', { fallback: 5, overrides: Array.from({ length: 51 }, (_, i) => ({ name: `n${i}`, multiple: 5 })) }],
-  ])('rejects %s', (_n, raw) => expect(parseMultiplesInput(raw)).toMatchObject({ ok: false }));
+    ['no default', { groups: [] }],
+    ['no groups list', { defaultSize: 1 }],
+    ['a group that is not an object', { defaultSize: 1, groups: ['x'] }],
+    ['a group without a size', { defaultSize: 1, groups: [{ variantIds: [] }] }],
+    ['a group without a list', { defaultSize: 1, groups: [{ size: 5 }] }],
+    ['an id that is not a variant', { defaultSize: 1, groups: [{ size: 5, variantIds: ['gid://shopify/Product/1'] }] }],
+    ['too many groups', { defaultSize: 1, groups: Array.from({ length: 21 }, () => ({ size: 5, variantIds: [] })) }],
+    ['too many variants', { defaultSize: 1, groups: [{ size: 5, variantIds: Array.from({ length: 2001 }, (_, i) => V(i + 1)) }] }],
+  ])('rejects %s', (_n, raw) => expect(parsePackSizesInput(raw)).toMatchObject({ ok: false }));
 });
 
 describe('parseTransferInput', () => {

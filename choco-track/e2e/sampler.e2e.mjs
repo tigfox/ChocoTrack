@@ -334,6 +334,51 @@ describe('Create kit validation', () => {
   });
 });
 
+describe('Settings: Pack Size', () => {
+  const openCard = () => app().locator('summary', { hasText: 'Pack Size' }).evaluate((el) => (el.parentElement.open = true));
+  const groupCount = () => app().locator('s-number-field[label^="Pack size, group"]').count();
+  const click = (label, which = 'first') => app().locator('s-button', { hasText: label })[which]().evaluate((el) => el.click());
+  const saved = () => app().waitForFunction(() => /Saved pack sizes/.test(document.body.innerText), null, { timeout: 30_000 });
+
+  it('adds a group with a mini flavor, saves it, and shows it by name after a reload', async () => {
+    await open('settings');
+    await openCard();
+    assert.match(await text(), /Pack Size/);
+    assert.doesNotMatch(await text(), /Send in multiples of/);
+    const before = await groupCount();
+    try {
+      await click('Add a pack size group');
+      await setValue(app().locator(`s-number-field[label="Pack size, group ${before + 1}"]`), '100');
+      await click('Add products', 'last');
+      await page.waitForTimeout(1_000);
+      await setValue(app().locator('#pack-group-picker s-search-field'), 'MIN-BOL-RAR');
+      await app().waitForSelector('#pack-group-picker [data-testid="pick-MIN-BOL-RAR"]', { state: 'attached', timeout: 30_000 });
+      await app().locator('#pack-group-picker [data-testid="pick-MIN-BOL-RAR"] s-button').first().evaluate((el) => el.click());
+      await app().locator('#pack-group-picker s-button', { hasText: 'Done' }).first().evaluate((el) => el.click());
+      await page.waitForTimeout(500);
+      assert.match(await text(), /Bolivia 72%/);
+      await click('Save pack sizes');
+      await saved();
+
+      await open('settings');
+      await openCard();
+      assert.equal(await groupCount(), before + 1, 'the group is still there after a reload');
+      assert.match(await text(), /Bolivia 72%/, 'the saved variant is shown by name');
+      assert.equal(await app().locator(`s-number-field[label="Pack size, group ${before + 1}"]`).evaluate((el) => el.value), '100');
+    } finally {
+      // Put the setting back: remove any group beyond the ones that existed, then save.
+      await open('settings');
+      await openCard();
+      let extra = (await groupCount()) - before;
+      while (extra-- > 0) await click('Remove group', 'last');
+      if ((await app().locator('s-button', { hasText: 'Save pack sizes' }).first().getAttribute('disabled')) === null) {
+        await click('Save pack sizes');
+        await saved();
+      }
+    }
+  });
+});
+
 describe('Inventory: unsaved edits', () => {
   // Needs at least one tracked product (flag one with Add products); nothing here is saved, so stock and targets are untouched.
   it('warns before "Done editing" drops unsaved rows; Keep editing keeps them, Discard drops them', async () => {

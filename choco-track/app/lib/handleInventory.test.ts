@@ -42,7 +42,7 @@ const setOk = { metafieldsSet: { metafields: [{ key: 'k', compareDigest: 'new' }
 const reportRoutes = (over: Record<string, unknown> = {}) => ({
   'query Locations': { locations: { nodes: [{ id: W, name: 'Warehouse', isActive: true }, { id: M, name: 'Market', isActive: true }] } },
   'query SourceLocations': {
-    currentAppInstallation: { metafield: { value: JSON.stringify([W]) }, multiples: { value: JSON.stringify({ default: 1, byName: {} }) } },
+    currentAppInstallation: { metafield: { value: JSON.stringify([W]) }, packSizes: { value: JSON.stringify({ default: 1, groups: [] }) } },
   },
   'query FlaggedProducts': { products: { nodes: [{ id: P }], pageInfo: { hasNextPage: false, endCursor: null } } },
   'query TrackedProducts': { nodes: [productNode({ [W]: { min: 0, max: 100 }, [M]: { min: 10, max: 30 } })] },
@@ -115,19 +115,22 @@ describe('handleInventory', () => {
     });
   });
 
-  describe('saveMultiples', () => {
+  describe('savePackSizes', () => {
     const client = () => routedClient({ 'query AppInstallationId': { currentAppInstallation: { id: 'gid://shopify/AppInstallation/1' } }, 'mutation SetMetafields': setOk });
+    const V = 'gid://shopify/ProductVariant/1';
     it('stores the pack sizes', async () => {
       const c = client();
-      await expect(handleInventory(c, { intent: 'saveMultiples', fallback: 5, overrides: [{ name: 'Mini', multiple: 100 }] })).resolves.toEqual({
+      await expect(handleInventory(c, { intent: 'savePackSizes', defaultSize: 1, groups: [{ size: 100, variantIds: [V] }] })).resolves.toEqual({
         ok: true,
         message: 'Saved pack sizes.',
       });
-      expect(c.calls.find((x) => x.query.includes('SetMetafields'))?.variables).toMatchObject({ metafields: [{ value: '{"default":5,"byName":{"mini":100}}' }] });
+      expect(c.calls.find((x) => x.query.includes('SetMetafields'))?.variables).toMatchObject({
+        metafields: [{ value: `{"default":1,"groups":[{"size":100,"variantIds":["${V}"]}]}` }],
+      });
     });
     it('refuses a bad request without calling Shopify', async () => {
       const c = client();
-      await expect(handleInventory(c, { intent: 'saveMultiples', fallback: 0, overrides: [] })).resolves.toEqual({ ok: false, message: 'Enter a whole number from 1 to 1000.' });
+      await expect(handleInventory(c, { intent: 'savePackSizes', defaultSize: 0, groups: [] })).resolves.toEqual({ ok: false, message: 'Enter a whole number from 1 to 1000.' });
       expect(c.calls).toHaveLength(0);
     });
   });
@@ -144,17 +147,19 @@ describe('handleInventory', () => {
       const call = client.calls.find((c) => c.query.includes('CreateDraftTransfer'));
       expect(call?.variables).toMatchObject({ key: `${KEY}:${W}:${M}`, input: { lineItems: [{ inventoryItemId: 'item-1', quantity: 26 }] } });
     });
-    it('ships in the saved pack sizes, so a mini is sent in boxes of 100', async () => {
+    it('ships in the pack size of the saved group the variant is in', async () => {
       const wide = productNode({ [W]: { min: 0, max: 1000 }, [M]: { min: 10, max: 330 } });
       const routes = reportRoutes({
         'mutation CreateDraftTransfer': created,
         'query TrackedProducts': { nodes: [wide] },
         'query TrackedLevels': { nodes: [levelsNode(900, 4)] },
-        'query SourceLocations': { currentAppInstallation: { metafield: { value: JSON.stringify([W]) }, multiples: null } },
+        'query SourceLocations': {
+          currentAppInstallation: { metafield: { value: JSON.stringify([W]) }, packSizes: { value: JSON.stringify({ default: 1, groups: [{ size: 100, variantIds: [V] }] }) } },
+        },
       });
       const client = routedClient(routes);
       const out = await handleInventory(client, { intent: 'createTransfers', key: KEY });
-      expect(out).toMatchObject({ ok: true, created: [{ lines: [{ variantId: V, quantity: 300 }] }] }); // need 326, Mini = 100
+      expect(out).toMatchObject({ ok: true, created: [{ lines: [{ variantId: V, quantity: 300 }] }] }); // need 326, pack of 100
     });
     it('can be limited to one route', async () => {
       const client = routedClient(reportRoutes({ 'mutation CreateDraftTransfer': created }));

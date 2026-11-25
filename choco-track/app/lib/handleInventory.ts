@@ -2,9 +2,9 @@ import { hasTargets } from '../domain/tracking';
 import type { LevelMap } from '../domain/tracking';
 import type { GraphqlClient } from '../shopify/client';
 import { friendlyMessage } from '../shopify/errors';
-import { createDraftTransfer, saveMultiples, saveSourceIds, saveVariantTargets, setProductFlag } from '../shopify/inventoryWrites';
+import { createDraftTransfer, savePackSizes, saveSourceIds, saveVariantTargets, setProductFlag } from '../shopify/inventoryWrites';
 import { loadInventoryReport, loadLevels, loadProducts, type ReportProduct } from '../shopify/trackedCatalog';
-import { parseFlagInput, parseMultiplesInput, parseSourcesInput, parseTargetsInput, parseTransferInput } from './inventoryInput';
+import { parseFlagInput, parsePackSizesInput, parseSourcesInput, parseTargetsInput, parseTransferInput } from './inventoryInput';
 import { logError } from './logError';
 import { planTransfers } from './planTransfers';
 
@@ -57,10 +57,10 @@ const saveSources = async (client: GraphqlClient, raw: unknown): Promise<Invento
   return { ok: true, message: 'Saved source locations.' };
 };
 
-const saveMultiplesIntent = async (client: GraphqlClient, raw: unknown): Promise<InventoryResponse> => {
-  const parsed = parseMultiplesInput(raw);
+const savePackSizesIntent = async (client: GraphqlClient, raw: unknown): Promise<InventoryResponse> => {
+  const parsed = parsePackSizesInput(raw);
   if (!parsed.ok) return fail(parsed.error);
-  await saveMultiples(client, parsed.value.multiples);
+  await savePackSizes(client, parsed.value.packSizes);
   return { ok: true, message: 'Saved pack sizes.' };
 };
 
@@ -114,8 +114,8 @@ export const handleInventory = async (client: GraphqlClient, raw: unknown): Prom
         return await saveTargets(client, raw);
       case 'saveSources':
         return await saveSources(client, raw);
-      case 'saveMultiples':
-        return await saveMultiplesIntent(client, raw);
+      case 'savePackSizes':
+        return await savePackSizesIntent(client, raw);
       case 'createTransfers':
         return await createTransfers(client, raw);
       default:

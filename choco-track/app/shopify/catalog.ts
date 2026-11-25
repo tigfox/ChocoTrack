@@ -114,23 +114,34 @@ const CATEGORY_PRODUCT_PREFIX = /^Mini Bars - /i;
 /** The category product's title without the shared prefix ("Mini Bars - Rare" becomes "Rare"). */
 const groupLabel = (productTitle: string): string => productTitle.replace(CATEGORY_PRODUCT_PREFIX, '');
 
+/** What the variant is called on screen: the display name, else a humanized flavor of a category product, else "Product - Variant". */
+export const variantNames = (v: {
+  readonly title: string;
+  readonly displayName?: { readonly value: string } | null;
+  readonly product: { readonly title: string };
+}): { readonly title: string; readonly group?: string } => {
+  const isDefault = v.title === DEFAULT_VARIANT_TITLE;
+  // A flavor: the display name, else (for a category product only) the humanized slug. Anything else keeps "Product - Variant",
+  // so a variant named "12" or "6-pack" on an ordinary product is not renamed.
+  const isCategoryFlavor = !isDefault && CATEGORY_PRODUCT_PREFIX.test(v.product.title) && isFlavorSlug(v.title);
+  const flavor = v.displayName?.value || (isCategoryFlavor ? humanizeFlavor(v.title) : undefined);
+  return {
+    title: flavor ?? (isDefault ? v.product.title : `${v.product.title} - ${v.title}`),
+    ...(flavor && !isDefault ? { group: groupLabel(v.product.title) } : {}),
+  };
+};
+
 export const toCatalogVariant = (node: VariantNode): CatalogVariant => {
   const imageUrl = node.image?.url ?? node.product.featuredMedia?.preview?.image?.url;
   const kitSize = parseKitSize(node.kitSize?.value);
   const categoryId = node.category?.value;
-  const isDefault = node.title === DEFAULT_VARIANT_TITLE;
-  // A flavor: the display name, else (for a category product only) the humanized slug. Anything else keeps "Product - Variant",
-  // so a variant named "12" or "6-pack" on an ordinary product is not renamed.
-  const isCategoryFlavor = !isDefault && CATEGORY_PRODUCT_PREFIX.test(node.product.title) && isFlavorSlug(node.title);
-  const flavor = node.displayName?.value || (isCategoryFlavor ? humanizeFlavor(node.title) : undefined);
   return {
     id: node.id,
     inventoryItemId: node.inventoryItem.id,
-    title: flavor ?? (isDefault ? node.product.title : `${node.product.title} - ${node.title}`),
+    ...variantNames(node),
     sku: node.sku ?? '',
     barcode: node.barcode ?? '',
     collectionIds: node.product.collections.nodes.map((c) => c.id),
-    ...(flavor && !isDefault ? { group: groupLabel(node.product.title) } : {}),
     ...(imageUrl ? { imageUrl } : {}),
     ...(kitSize ? { kitSize } : {}),
     ...(categoryId ? { categoryId } : {}),
