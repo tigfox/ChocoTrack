@@ -6,7 +6,7 @@ A Shopify app that assembles "sampler kits" from mini chocolate bar inventory, u
 
 **Built and working in the dev store (`creeklakeconfections`):** Assemble, Disassemble, Settings (kits and categories), search with collection filter, printable pick list, finished-box preview with product images, remembered location, kit and collection, and error handling for dropped connections and stale stock. The mockup is frozen.
 
-**Checks:** 658 unit and render tests (99% lines; gate is 80%), typecheck, lint and build clean, an opt-in live test against the dev store, and 17 browser tests (`npm run test:e2e`). CI on GitHub passes on every push to `main` with pinned action versions.
+**Checks:** 658 unit and render tests (99% lines; gate is 80%), typecheck, lint and build clean, an opt-in live test against the dev store, and 19 browser tests (`npm run test:e2e`). CI on GitHub passes on every push to `main` with pinned action versions.
 
 | Phase | State |
 |---|---|

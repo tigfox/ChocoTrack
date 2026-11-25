@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRevalidator } from "react-router";
 import { hasTargets, lowSummary, productsWithoutTargets } from "../domain/tracking";
 import type { Targets } from "../domain/targets";
@@ -10,6 +10,7 @@ import { postInventory } from "../lib/postInventory";
 import { readPreferences, writePreferences } from "../lib/preferences";
 import { buildReportGroups, limitGroups } from "../lib/reportRows";
 import { addPending, mergeLevels, reconcileProducts, removeProduct, upsertProduct, withVariantTargets } from "../lib/reportState";
+import { unsavedMessage, withDirty } from "../lib/unsavedRows";
 import type { InventoryReport, ReportVariant } from "../shopify/trackedCatalog";
 import { fieldChecked, fieldValue } from "../wc";
 import { AddProductsModal } from "./AddProductsModal";
@@ -55,6 +56,8 @@ function LoadedInventory({ report, collections, shopHandle, refreshing, onRefres
   const [pending, setPending] = useState(report.pending);
   const [flagChanges, setFlagChanges] = useState<Readonly<Record<string, boolean>>>({});
   const [editing, setEditing] = useState(false);
+  const [dirtyIds, setDirtyIds] = useState<readonly string[]>([]);
+  const [confirmingDone, setConfirmingDone] = useState(false);
   const [search, setSearch] = useState("");
   const [lowOnly, setLowOnly] = useState(false);
   const [showUntargeted, setShowUntargeted] = useState(false);
@@ -93,6 +96,18 @@ function LoadedInventory({ report, collections, shopHandle, refreshing, onRefres
   );
   const truncated = products.filter((p) => p.truncated);
   const trackedIds = useMemo(() => new Set(products.map((p) => p.id)), [products]);
+
+  const setDirty = useCallback((id: string, dirty: boolean) => setDirtyIds((prev) => withDirty(prev, id, dirty)), []);
+  // Each row saves on its own. Finishing with unsaved rows asks first, so edits are not dropped by accident.
+  const toggleEditing = () => {
+    if (editing && dirtyIds.length > 0) return setConfirmingDone(true);
+    setConfirmingDone(false);
+    setEditing((e) => !e);
+  };
+  const discardAndFinish = () => {
+    setConfirmingDone(false);
+    setEditing(false);
+  };
 
   const setHidden = (ids: readonly string[]) => {
     setHiddenIds(ids);
@@ -139,7 +154,7 @@ function LoadedInventory({ report, collections, shopHandle, refreshing, onRefres
         {`Suggest transfers (${plan.transfers.length})`}
       </s-button>
       <s-button slot="secondary-actions" onClick={() => setAddOpen(true)}>Add products</s-button>
-      <s-button slot="secondary-actions" onClick={() => setEditing((e) => !e)}>{editing ? "Done editing" : "Edit targets"}</s-button>
+      <s-button slot="secondary-actions" onClick={toggleEditing}>{editing ? "Done editing" : "Edit targets"}</s-button>
       <s-button slot="secondary-actions" loading={refreshing} onClick={onRefresh}>Refresh</s-button>
 
       <s-stack gap="base">
@@ -223,7 +238,19 @@ function LoadedInventory({ report, collections, shopHandle, refreshing, onRefres
         ) : (
           <s-section>
             <s-stack gap="base">
-              <InventoryTable groups={limitGroups(groups, limit)} locations={visibleLocations} editing={editing} onSave={saveTargets} />
+              {editing && confirmingDone && dirtyIds.length > 0 && (
+                <s-banner tone="warning" heading="Unsaved changes">
+                  <s-stack gap="small-200">
+                    <s-text>{`${unsavedMessage(dirtyIds.length)} Press Save on each row to keep them.`}</s-text>
+                    <s-stack direction="inline" gap="small-200">
+                      <s-button variant="primary" onClick={() => setConfirmingDone(false)}>Keep editing</s-button>
+                      <s-button onClick={discardAndFinish}>Discard changes</s-button>
+                    </s-stack>
+                  </s-stack>
+                </s-banner>
+              )}
+              {editing && !confirmingDone && <s-text color="subdued">Each row saves on its own: press Save on a row before you finish.</s-text>}
+              <InventoryTable groups={limitGroups(groups, limit)} locations={visibleLocations} editing={editing} onSave={saveTargets} onDirty={setDirty} />
               {rowCount > limit && (
                 <div>
                   <s-button onClick={() => setLimit((n) => n + ROW_PAGE)}>{`Show more (${rowCount - limit} left)`}</s-button>

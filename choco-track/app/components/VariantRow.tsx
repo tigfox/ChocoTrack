@@ -15,6 +15,8 @@ interface Props {
   readonly locations: readonly Location[];
   readonly editing: boolean;
   readonly onSave: (targets: Targets) => Promise<InventoryResponse>;
+  /** Tells the page whether this row has edits that were not saved (only while editing). */
+  readonly onDirty?: (variantId: string, dirty: boolean) => void;
 }
 
 /** Hidden locations keep their targets: drafts cover every location the variant has a target at, visible or not. */
@@ -22,7 +24,7 @@ const draftIds = (row: ReportRow, locations: readonly Location[]): readonly stri
   ...new Set([...locations.map((l) => l.id), ...Object.keys(row.variant.targets)]),
 ];
 
-export function VariantRow({ row, productTitle, showProduct, locations, editing, onSave }: Props) {
+export function VariantRow({ row, productTitle, showProduct, locations, editing, onSave, onDirty }: Props) {
   const { variant } = row;
   const ids = draftIds(row, locations);
   const [drafts, setDrafts] = useState<Drafts>(() => targetsToDrafts(variant.targets, ids));
@@ -38,6 +40,12 @@ export function VariantRow({ row, productTitle, showProduct, locations, editing,
 
   const parsed = draftsToTargets(drafts);
   const dirty = !parsed.ok || !sameTargets(parsed.targets, variant.targets);
+
+  const unsaved = editing && dirty;
+  useEffect(() => {
+    onDirty?.(variant.id, unsaved);
+    return () => onDirty?.(variant.id, false);
+  }, [variant.id, unsaved, onDirty]);
 
   const setField = (locationId: string, field: "min" | "max", value: string) =>
     setDrafts((prev) => ({ ...prev, [locationId]: { ...(prev[locationId] ?? { min: "", max: "" }), [field]: value } }));

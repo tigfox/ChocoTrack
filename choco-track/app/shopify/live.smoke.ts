@@ -3,7 +3,7 @@
 import { execFileSync } from 'node:child_process';
 import { listCollections, listKits, searchVariants } from './catalog';
 import { createKit } from './kits';
-import { findFlaggedProductIds, loadInventoryReport, loadProducts, loadLevels } from './trackedCatalog';
+import { findFlaggedProductIds, loadInventoryReport, loadLevels, loadProducts, loadTransferSettings } from './trackedCatalog';
 import { saveVariantTargets, searchProductsForFlag, setProductFlag } from './inventoryWrites';
 import type { GraphqlClient } from './client';
 import { ShopifyApiError } from './errors';
@@ -12,7 +12,6 @@ import type { StockMap } from '../domain/types';
 import { listLocations } from './locations';
 import { handleRun } from '../lib/handleRun';
 import { handleInventory } from '../lib/handleInventory';
-import { loadTransferSettings } from './trackedCatalog';
 import { loadVariantLabels } from './variantLabels';
 
 const store = process.env.LIVE_STORE;

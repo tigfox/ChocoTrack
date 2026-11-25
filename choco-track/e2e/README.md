@@ -4,7 +4,7 @@ Click-through tests of the embedded screens. They attach to a Chrome you start a
 
 1. Quit Chrome, then: `open -a "Google Chrome" --args --remote-debugging-port=9222 --user-data-dir=$HOME/chocotrack-chrome`
 2. Sign in to the `creeklakeconfections` admin in that window.
-3. Run `shopify app dev` and open the app once.
-4. `npm run test:e2e`
+3. Open the app once. To test the deployed build, open ChocoTrack Production and run with `APP_HANDLE=chocotrack-production`; to test local changes, run `shopify app dev` and use the default handle.
+4. `APP_HANDLE=chocotrack-production npm run test:e2e`
 
 They run against the dev store and are net-zero on stock (assemble, then disassemble). Not run in CI.
