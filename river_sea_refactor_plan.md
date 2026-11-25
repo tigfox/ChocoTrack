@@ -65,9 +65,15 @@ Three to review: `Peach Ipa Dark Milk` (should read `Peach IPA`), `Peru 72` (no 
 | Mini Bars Box of 100 / 500 | n/a | bulk cartons, not assembled from mixed minis: out of scope |
 | Combos (`12 Bar Mini Sampler + …`) | n/a | contain other kits, not minis: out of scope |
 
-## Status (2026-11-24): steps 1-7 done on branch `feat/variant-level-kits`; step 8 (review, PR, deploy) is next
+## Status (2026-11-24): complete and deployed
 
-Done: variant-level kit metafields; link an existing product as a kit; importer collections, kits (`--kits`), flavor names and published flags (`--finish` applies them to an imported store); flavor display names with the category under them; old seed scripts removed; live test updated and passing against the dev store (5/5); unit tests 658 passing. **Browser tests:** all 19 in `e2e/sampler.e2e.mjs` pass against the deployed app (`APP_HANDLE=chocotrack-production`), including new ones for the Add products list and the link-as-kit flow. Only 2 of the 6 kit candidates track inventory in the live store (12 Bar Mini Sampler Box, 6 Bar Single-Origin Select Box); the other 4 need tracking turned on in Shopify before they can be linked.
+All eight steps are done and in production (PRs #19 to #28). Variant-level kit metafields; **Use an existing product as a kit**; importer collections, kits (`--kits`), flavor names and published flags (`--finish`); flavor display names with the category underneath; old seed scripts removed. Review findings (kit rename on edit, over-broad flavor humanizing, write order, link-modal state, importer `--confirm`) were fixed before merge. Follow-ups found by use and fixed: Add products list order and Show more (#20), unsaved-rows warning (#22), Pack Size groups replacing the by-name setting (#23), a crash when typing a pack size (#24), an Untracked checkbox per Inventory variant (#27).
+
+**Checks:** 731 unit tests; live test against the dev store 7/7; browser tests 22/22 against the deployed app, now failing on browser JavaScript errors (#25).
+
+**Left for the live store (not code):** only 2 of the 6 kit products track inventory (12 Bar Mini Sampler Box, 6 Bar Single-Origin Select Box); all 27 mini flavors are untracked; the "Mini bars" and category collections may not exist; "5 Bar Mini Pack" and "Truffles 5 Piece" share the SKU `TRU-DML-5PK`; the white chocolate minis have no SKUs. The checklist for the store team is `StoreTasks.pdf` (in `/Users/tigfox/Documents/River Sea/`). The importer refuses non-development stores, so the live store needs a separate read-only readiness check and a small job to apply the 25 display names; neither is built.
+
+**Known limits:** the kit list reads up to 50 kit products and 10 variants each (the largest today has 6); `updateKit` and `linkKit` write in sequence (metafields first, then rename or tag), retryable but not atomic; renaming a multi-variant kit renames its product; the importer's kit and name steps read at most 50 variants per product without paging.
 
 ## Phases (TDD for every step: test first, then code, then review)
 
