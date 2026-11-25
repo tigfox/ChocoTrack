@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRevalidator } from "react-router";
-import { hasTargets, lowSummary, productsWithoutTargets } from "../domain/tracking";
+import { isMonitored, lowSummary, productsWithoutTargets } from "../domain/tracking";
 import type { Targets } from "../domain/targets";
 import type { Collection } from "../domain/types";
 import { browserStorage } from "../lib/browserStorage";
@@ -9,7 +9,7 @@ import { planTransfers } from "../lib/planTransfers";
 import { postInventory } from "../lib/postInventory";
 import { readPreferences, writePreferences } from "../lib/preferences";
 import { buildReportGroups, limitGroups } from "../lib/reportRows";
-import { addPending, mergeLevels, reconcileProducts, removeProduct, upsertProduct, withVariantTargets } from "../lib/reportState";
+import { addPending, mergeLevels, reconcileProducts, removeProduct, upsertProduct, withVariantTargets, withVariantUntracked } from "../lib/reportState";
 import { unsavedMessage, withDirty } from "../lib/unsavedRows";
 import type { InventoryReport, ReportVariant } from "../shopify/trackedCatalog";
 import { fieldChecked, fieldValue } from "../wc";
@@ -61,6 +61,7 @@ function LoadedInventory({ report, collections, shopHandle, refreshing, onRefres
   const [search, setSearch] = useState("");
   const [lowOnly, setLowOnly] = useState(false);
   const [showUntargeted, setShowUntargeted] = useState(false);
+  const [showUntracked, setShowUntracked] = useState(false);
   const [hiddenIds, setHiddenIds] = useState<readonly string[]>([]);
   const [limit, setLimit] = useState(ROW_PAGE);
   const [notice, setNotice] = useState<{ tone: "success" | "critical"; text: string } | undefined>();
@@ -81,14 +82,14 @@ function LoadedInventory({ report, collections, shopHandle, refreshing, onRefres
 
   const variants = useMemo(() => products.flatMap((p) => p.variants), [products]);
   const visibleLocations = report.locations.filter((l) => !hiddenIds.includes(l.id));
-  const { groups, rowCount, hiddenUntargeted } = buildReportGroups({
+  const { groups, rowCount, hiddenUntargeted, hiddenUntracked } = buildReportGroups({
     products,
     levels,
     pending,
     locationIds: visibleLocations.map((l) => l.id),
-    filters: { search, lowOnly, showUntargeted },
+    filters: { search, lowOnly, showUntargeted, showUntracked },
   });
-  const summary = lowSummary(variants.filter(hasTargets), levels, pending);
+  const summary = lowSummary(variants.filter(isMonitored), levels, pending);
   const needTargets = productsWithoutTargets(products);
   const plan = useMemo(
     () => planTransfers({ products, levels, pending, sourceIds: report.sourceIds, locations: report.locations, packSizes: report.packSizes }),
@@ -120,6 +121,12 @@ function LoadedInventory({ report, collections, shopHandle, refreshing, onRefres
       setProducts((prev) => withVariantTargets(prev, variant.id, targets, result.digest ?? null));
       setNotice({ tone: "success", text: `Saved targets for ${variant.productTitle}${variant.title === "Default Title" ? "" : ` - ${variant.title}`}.` });
     }
+    return result;
+  };
+
+  const setUntracked = async (variant: ReportVariant, untracked: boolean): Promise<InventoryResponse> => {
+    const result = await postInventory({ intent: "setVariantUntracked", variantId: variant.id, untracked });
+    if (result.ok) setProducts((prev) => withVariantUntracked(prev, variant.id, untracked));
     return result;
   };
 
@@ -207,6 +214,11 @@ function LoadedInventory({ report, collections, shopHandle, refreshing, onRefres
                 checked={showUntargeted}
                 onChange={(e) => setShowUntargeted(fieldChecked(e))}
               />
+              <s-checkbox
+                label={`Show untracked variants (${hiddenUntracked})`}
+                checked={showUntracked}
+                onChange={(e) => setShowUntracked(fieldChecked(e))}
+              />
             </s-stack>
             <s-stack direction="inline" gap="large" alignItems="center">
               <s-text color="subdued">Locations</s-text>
@@ -233,7 +245,7 @@ function LoadedInventory({ report, collections, shopHandle, refreshing, onRefres
           </s-section>
         ) : rowCount === 0 ? (
           <s-section>
-            <s-text color="subdued">No variants match. Clear the filters, or turn on &quot;Show variants without targets&quot;.</s-text>
+            <s-text color="subdued">No variants match. Clear the filters, or turn on &quot;Show variants without targets&quot; or &quot;Show untracked variants&quot;.</s-text>
           </s-section>
         ) : (
           <s-section>
@@ -250,7 +262,7 @@ function LoadedInventory({ report, collections, shopHandle, refreshing, onRefres
                 </s-banner>
               )}
               {editing && !confirmingDone && <s-text color="subdued">Each row saves on its own: press Save on a row before you finish.</s-text>}
-              <InventoryTable groups={limitGroups(groups, limit)} locations={visibleLocations} editing={editing} onSave={saveTargets} onDirty={setDirty} />
+              <InventoryTable groups={limitGroups(groups, limit)} locations={visibleLocations} editing={editing} onSave={saveTargets} onDirty={setDirty} onUntracked={setUntracked} />
               {rowCount > limit && (
                 <div>
                   <s-button onClick={() => setLimit((n) => n + ROW_PAGE)}>{`Show more (${rowCount - limit} left)`}</s-button>

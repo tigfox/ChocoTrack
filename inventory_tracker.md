@@ -162,6 +162,21 @@ Two changes to suggested transfers, both built test-first. 516 unit and server-r
 
 **Where it applies:** `app/domain/packSizes.ts` (parse, validate, look up by variant id, move variants between groups), `app/domain/suggest.ts` (the rounding), `planTransfers` (shared by the screen preview and the server, which recomputes on fresh data before creating anything, so the draft always matches the preview).
 
+### Change 3: switch single variants off ("Untracked", 2026-11-25)
+
+**Why:** flagging a product put *all* of its variants in the report, and then warned when a product had no targets, even when the store only cares about one or two variants (for example a 60g bar but not its multipack variants).
+
+**What it does:** every variant row on Inventory has an **Untracked** checkbox. Ticking it saves immediately (no Save button) and switches that variant off:
+- it is **not shown** in the table (a **Show untracked variants (N)** filter brings switched-off variants back, dimmed, so the switch can be undone);
+- it is **not alerted on**: not in the low-stock summary, the red banner or the sidebar count;
+- it is **not suggested** for transfers, and a **product whose variants are all switched off is not listed** under "N tracked products have no targets yet";
+- it is **not counted** in "Show variants without targets (N)".
+Its saved targets are kept, so unticking the box restores it as it was.
+
+**Stored as** the variant metafield `choco_track.untracked` (boolean), written by the new `setVariantUntracked` intent. No database. `isMonitored` (`app/domain/tracking.ts`: has targets and is not switched off) replaced `hasTargets` in the alert, count and transfer code.
+
+**Checklist:** on Inventory, tick Untracked on a variant: it disappears, the filter label counts it, and it is gone from the low banner and from Suggest transfers. Turn on **Show untracked variants**: it returns dimmed with the box ticked. Untick it: it is back as before, with its targets. Reload: the choices stay.
+
 ### Test additions
 
 Human test checklist step 6 changes: quantities are whole packs of each variant's group size (default 1), a line that was rounded up says so, and after creating a draft the **Open draft** link opens it in Shopify. New steps: on **Settings**, make a pack size group (for example 100), add the minis to it with **Add products**, save, reload (the group and the variant names stay) and see the suggestions change; try 0 or 2.5 (a message, nothing saved), and add a variant that is already in another group (it moves).

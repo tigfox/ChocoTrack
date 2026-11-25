@@ -115,6 +115,26 @@ describe('handleInventory', () => {
     });
   });
 
+  describe('setVariantUntracked', () => {
+    const V = 'gid://shopify/ProductVariant/1';
+    it('switches a variant off and on', async () => {
+      const c = routedClient({ 'mutation SetMetafields': setOk });
+      await expect(handleInventory(c, { intent: 'setVariantUntracked', variantId: V, untracked: true })).resolves.toEqual({
+        ok: true,
+        message: 'Stopped tracking this variant.',
+      });
+      await expect(handleInventory(c, { intent: 'setVariantUntracked', variantId: V, untracked: false })).resolves.toEqual({
+        ok: true,
+        message: 'Tracking this variant again.',
+      });
+    });
+    it('refuses a bad request without calling Shopify', async () => {
+      const c = routedClient({});
+      await expect(handleInventory(c, { intent: 'setVariantUntracked', variantId: 'x', untracked: true })).resolves.toEqual({ ok: false, message: 'Invalid request.' });
+      expect(c.calls).toHaveLength(0);
+    });
+  });
+
   describe('savePackSizes', () => {
     const client = () => routedClient({ 'query AppInstallationId': { currentAppInstallation: { id: 'gid://shopify/AppInstallation/1' } }, 'mutation SetMetafields': setOk });
     const V = 'gid://shopify/ProductVariant/1';

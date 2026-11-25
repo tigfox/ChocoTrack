@@ -462,3 +462,55 @@ describe('Settings: use an existing product as a kit', () => {
     await app().locator(`${modal} s-button`, { hasText: 'Cancel' }).first().evaluate((el) => el.click());
   });
 });
+
+describe('Inventory: untracked variants', () => {
+  // Needs at least one tracked product. Switches one variant off and back on, so nothing is left changed.
+  it('switching a variant off hides it and counts it; it can be shown and switched back on', async () => {
+    await open('inventory');
+    await app().locator('s-checkbox[label^="Show variants without targets"]').evaluate((el) => {
+      el.checked = true;
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    const boxes = () => app().locator('s-checkbox[label="Untracked"]');
+    await boxes().first().waitFor({ state: 'attached', timeout: 20_000 });
+    const before = await boxes().count();
+    assert.ok(before > 0, 'there is a variant to switch off');
+    try {
+      await boxes().first().evaluate((el) => {
+        el.checked = true;
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      await app().waitForFunction((n) => document.querySelectorAll('s-checkbox[label="Untracked"]').length === n - 1, before, { timeout: 20_000 });
+      assert.match(await text(), /Show untracked variants \(1\)/);
+
+      await app().locator('s-checkbox[label^="Show untracked variants"]').evaluate((el) => {
+        el.checked = true;
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      await app().waitForFunction((n) => document.querySelectorAll('s-checkbox[label="Untracked"]').length === n, before, { timeout: 20_000 });
+      await app().evaluate(() => {
+        const off = [...document.querySelectorAll('s-checkbox[label="Untracked"]')].find((c) => c.checked);
+        off.checked = false;
+        off.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      await app().waitForFunction(() => /Show untracked variants \(0\)/.test(document.body.innerText), null, { timeout: 20_000 });
+    } finally {
+      // Whatever happened, leave nothing switched off.
+      await open('inventory');
+      await app().locator('s-checkbox[label^="Show untracked variants"]').evaluate((el) => {
+        el.checked = true;
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      await page.waitForTimeout(1_000);
+      await app().evaluate(() => {
+        for (const c of document.querySelectorAll('s-checkbox[label="Untracked"]')) {
+          if (c.checked) {
+            c.checked = false;
+            c.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+        }
+      });
+      await page.waitForTimeout(1_500);
+    }
+  });
+});

@@ -67,7 +67,7 @@ export function AddProductsModal({ open, collections, trackedIds, onClose, onFla
     <s-modal ref={ref} heading="Add products to track" id="add-products-modal">
       <s-stack gap="base">
         <s-paragraph color="subdued">
-          Tracking a product adds its variants to the report. Give a variant a minimum and maximum for a location and it is tracked there.
+          Tracking a product adds its variants to the report. Give a variant a minimum and maximum for a location and it is tracked there; tick Untracked on a variant you do not want in the report or in alerts.
         </s-paragraph>
         {error && <s-banner tone="critical">{error}</s-banner>}
         <s-grid gridTemplateColumns="2fr 1fr" gap="base">

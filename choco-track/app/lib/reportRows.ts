@@ -1,4 +1,4 @@
-import { cellView, hasTargets, type CellView, type LevelMap, type PendingMap } from '../domain/tracking';
+import { cellView, hasTargets, isUntracked, type CellView, type LevelMap, type PendingMap } from '../domain/tracking';
 import type { ReportProduct, ReportVariant } from '../shopify/trackedCatalog';
 
 export interface RowFilters {
@@ -6,6 +6,8 @@ export interface RowFilters {
   readonly lowOnly: boolean;
   /** Include variants of flagged products that have no targets yet. */
   readonly showUntargeted: boolean;
+  /** Include variants switched off with the Untracked checkbox, so they can be switched back on. */
+  readonly showUntracked?: boolean;
 }
 
 export interface ReportRow {
@@ -27,8 +29,10 @@ export interface ReportGroup {
 export interface ReportRows {
   readonly groups: readonly ReportGroup[];
   readonly rowCount: number;
-  /** Variants left out because they have no targets (shown with the "without targets" switch). */
+  /** Variants left out because they have no targets (shown with the "without targets" switch). Untracked variants are not counted. */
   readonly hiddenUntargeted: number;
+  /** Variants left out because they were switched off (shown with the "untracked" switch). */
+  readonly hiddenUntracked: number;
 }
 
 const DEFAULT_TITLE = 'Default Title';
@@ -58,10 +62,12 @@ export const buildReportGroups = (input: {
       locationIds.map((id) => [id, cellView(variant.targets[id], levels[variant.id]?.[id], pending[variant.id]?.[id] ?? 0)]),
     ),
   });
-  const keep = (row: ReportRow): boolean =>
-    (filters.showUntargeted || hasTargets(row.variant)) &&
-    matchesSearch(row.variant, filters.search) &&
-    (!filters.lowOnly || Object.values(row.cells).some((c) => c.status === 'low'));
+  const keep = (row: ReportRow): boolean => {
+    if (!matchesSearch(row.variant, filters.search)) return false;
+    // A switched-off variant shows only on request, and never in the low-only view.
+    if (isUntracked(row.variant)) return filters.showUntracked === true && !filters.lowOnly;
+    return (filters.showUntargeted || hasTargets(row.variant)) && (!filters.lowOnly || Object.values(row.cells).some((c) => c.status === 'low'));
+  };
   const groups = products
     .map((p): ReportGroup => ({
       productId: p.id,
@@ -74,7 +80,8 @@ export const buildReportGroups = (input: {
   return {
     groups,
     rowCount: groups.reduce((n, g) => n + g.rows.length, 0),
-    hiddenUntargeted: products.flatMap((p) => p.variants).filter((v) => !hasTargets(v)).length,
+    hiddenUntargeted: products.flatMap((p) => p.variants).filter((v) => !isUntracked(v) && !hasTargets(v)).length,
+    hiddenUntracked: products.flatMap((p) => p.variants).filter(isUntracked).length,
   };
 };
 

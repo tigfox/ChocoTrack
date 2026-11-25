@@ -10,6 +10,8 @@ export interface TrackedVariant {
   readonly sku: string;
   readonly imageUrl?: string;
   readonly targets: Targets;
+  /** Switched off by staff: not shown, not alerted on and not suggested for transfers. Its targets are kept. */
+  readonly untracked?: boolean;
 }
 
 export interface LevelCounts {
@@ -58,6 +60,11 @@ export const cellView = (target: Target | undefined, level: LevelCounts | undefi
 /** A variant is tracked once it has a target at one or more locations. */
 export const hasTargets = (v: { readonly targets: Targets }): boolean => Object.keys(v.targets).length > 0;
 
+export const isUntracked = (v: { readonly untracked?: boolean }): boolean => v.untracked === true;
+
+/** Counted for alerts, the sidebar number and transfer suggestions: it has targets and has not been switched off. */
+export const isMonitored = (v: { readonly targets: Targets; readonly untracked?: boolean }): boolean => hasTargets(v) && !isUntracked(v);
+
 export interface LowSummary {
   /** Variants with at least one low location. */
   readonly variants: number;
@@ -83,11 +90,18 @@ export const lowSummary = (variants: readonly TrackedVariant[], levels: LevelMap
 export interface FlaggedProduct {
   readonly id: string;
   readonly title: string;
-  readonly variants: ReadonlyArray<{ readonly targets: Targets }>;
+  readonly variants: ReadonlyArray<{ readonly targets: Targets; readonly untracked?: boolean }>;
 }
 
-/** Flagged products where no variant has a target yet, so the report can say why they show nothing. */
+/**
+ * Flagged products where no variant has a target yet, so the report can say why they show nothing.
+ * Untracked variants are ignored, so a product whose variants are all switched off is not listed.
+ */
 export const productsWithoutTargets = (products: readonly FlaggedProduct[]): ReadonlyArray<{ id: string; title: string }> =>
   products
-    .filter((p) => !p.variants.some((v) => Object.keys(v.targets).length > 0))
+    .filter((p) => {
+      const tracked = p.variants.filter((v) => !isUntracked(v));
+      if (p.variants.length > 0 && tracked.length === 0) return false; // every variant is switched off: nothing to nag about
+      return !tracked.some(hasTargets);
+    })
     .map(({ id, title }) => ({ id, title }));

@@ -47,6 +47,19 @@ describe('findFlaggedProductIds', () => {
   });
 });
 
+describe('loadProducts and the untracked switch', () => {
+  it('reads the variant flag, and leaves the property off when it is not set', async () => {
+    const client = fakeClient({
+      nodes: [productNode('p1', 'Rum', [variantNode('v1', { untracked: { value: 'true' } }), variantNode('v2', { untracked: { value: 'false' } }), variantNode('v3')])],
+    });
+    const [product] = await loadProducts(client, ['p1']);
+    expect(product?.variants[0]?.untracked).toBe(true);
+    expect(product?.variants[1]).not.toHaveProperty('untracked');
+    expect(product?.variants[2]).not.toHaveProperty('untracked');
+    expect(client.calls[0]?.query).toContain('untracked: metafield(namespace: "choco_track", key: "untracked")');
+  });
+});
+
 describe('loadProducts', () => {
   it('maps products and variants, parses targets and keeps the digest', async () => {
     const targets = { value: JSON.stringify({ [W]: { min: 10, max: 40 } }), compareDigest: 'dg1' };

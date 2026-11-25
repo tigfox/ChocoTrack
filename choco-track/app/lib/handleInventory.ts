@@ -1,10 +1,10 @@
-import { hasTargets } from '../domain/tracking';
+import { isMonitored } from '../domain/tracking';
 import type { LevelMap } from '../domain/tracking';
 import type { GraphqlClient } from '../shopify/client';
 import { friendlyMessage } from '../shopify/errors';
-import { createDraftTransfer, savePackSizes, saveSourceIds, saveVariantTargets, setProductFlag } from '../shopify/inventoryWrites';
+import { createDraftTransfer, savePackSizes, saveSourceIds, saveVariantTargets, setProductFlag, setVariantUntracked } from '../shopify/inventoryWrites';
 import { loadInventoryReport, loadLevels, loadProducts, type ReportProduct } from '../shopify/trackedCatalog';
-import { parseFlagInput, parsePackSizesInput, parseSourcesInput, parseTargetsInput, parseTransferInput } from './inventoryInput';
+import { parseFlagInput, parsePackSizesInput, parseSourcesInput, parseTargetsInput, parseTransferInput, parseUntrackedInput } from './inventoryInput';
 import { logError } from './logError';
 import { planTransfers } from './planTransfers';
 
@@ -50,6 +50,13 @@ const saveTargets = async (client: GraphqlClient, raw: unknown): Promise<Invento
   return { ok: true, message: 'Saved targets.', digest };
 };
 
+const setUntracked = async (client: GraphqlClient, raw: unknown): Promise<InventoryResponse> => {
+  const parsed = parseUntrackedInput(raw);
+  if (!parsed.ok) return fail(parsed.error);
+  await setVariantUntracked(client, parsed.value.variantId, parsed.value.untracked);
+  return { ok: true, message: parsed.value.untracked ? 'Stopped tracking this variant.' : 'Tracking this variant again.' };
+};
+
 const saveSources = async (client: GraphqlClient, raw: unknown): Promise<InventoryResponse> => {
   const parsed = parseSourcesInput(raw);
   if (!parsed.ok) return fail(parsed.error);
@@ -73,7 +80,7 @@ const createTransfers = async (client: GraphqlClient, raw: unknown): Promise<Inv
   const { key, originId, destinationId } = parsed.value;
   const report = await loadInventoryReport(client);
   if (report.draftsError) return fail(report.draftsError);
-  const itemByVariant = new Map(report.products.flatMap((p) => p.variants).filter(hasTargets).map((v) => [v.id, v.inventoryItemId]));
+  const itemByVariant = new Map(report.products.flatMap((p) => p.variants).filter(isMonitored).map((v) => [v.id, v.inventoryItemId]));
   const groups = planTransfers(report).transfers.filter(
     (t) => originId === undefined || (t.originId === originId && t.destinationId === destinationId),
   );
@@ -114,6 +121,8 @@ export const handleInventory = async (client: GraphqlClient, raw: unknown): Prom
         return await saveTargets(client, raw);
       case 'saveSources':
         return await saveSources(client, raw);
+      case 'setVariantUntracked':
+        return await setUntracked(client, raw);
       case 'savePackSizes':
         return await savePackSizesIntent(client, raw);
       case 'createTransfers':

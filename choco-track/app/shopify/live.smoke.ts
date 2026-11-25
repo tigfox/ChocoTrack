@@ -191,6 +191,21 @@ describe.skipIf(!store)('live dev store', () => {
     expect((await loadTransferSettings(cliClient)).packSizes).toEqual(before);
   }, 120_000);
 
+  // The Untracked switch: set it on a variant, read it back as the report does, then restore it.
+  it('switches a variant off for the report and back on', async () => {
+    const mini = (await searchVariants(cliClient, { text: 'MIN-HAI-ORI' })).variants[0];
+    if (!mini) throw new Error('seed data missing');
+    const { productVariant } = await cliClient<{ productVariant: { product: { id: string } } }>('query($id: ID!) { productVariant(id: $id) { product { id } } }', { id: mini.id });
+    const read = async () => (await loadProducts(cliClient, [productVariant.product.id]))[0]?.variants.find((v) => v.id === mini.id);
+    try {
+      expect(await handleInventory(cliClient, { intent: 'setVariantUntracked', variantId: mini.id, untracked: true })).toMatchObject({ ok: true });
+      expect((await read())?.untracked).toBe(true);
+    } finally {
+      await handleInventory(cliClient, { intent: 'setVariantUntracked', variantId: mini.id, untracked: false });
+    }
+    expect(await read()).not.toHaveProperty('untracked');
+  }, 120_000);
+
   // Shopify rejects queries over a cost limit; this reads a full batch (10 products, 25 variants) to prove it fits.
   it('reads a full batch of products and variants within Shopify\'s query cost limit', async () => {
     const { products } = await cliClient<{ products: { nodes: ReadonlyArray<{ id: string }> } }>(
