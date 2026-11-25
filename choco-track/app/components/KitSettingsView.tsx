@@ -5,17 +5,19 @@ import { CreateKitModal } from "./CreateKitModal";
 import { CollapsibleSection } from "./CollapsibleSection";
 import { KitSettingsCard } from "./KitSettingsCard";
 import { LinkKitModal } from "./LinkKitModal";
-import type { Multiples } from "../domain/multiples";
-import { MultiplesCard } from "./MultiplesCard";
+import type { PackSizes } from "../domain/packSizes";
+import type { VariantLabel } from "../shopify/variantLabels";
+import { PackSizeCard } from "./PackSizeCard";
 import { SourceLocationsCard } from "./SourceLocationsCard";
 
 interface Props {
   readonly workspace: Workspace;
   readonly sourceIds: readonly string[];
-  readonly multiples: Multiples;
+  readonly packSizes: PackSizes;
+  readonly labels: Readonly<Record<string, VariantLabel>>;
 }
 
-export function KitSettingsView({ workspace, sourceIds, multiples }: Props) {
+export function KitSettingsView({ workspace, sourceIds, packSizes, labels }: Props) {
   const [creating, setCreating] = useState(false);
   const [linking, setLinking] = useState(false);
   const { busy, response, submit, reset } = useSettingsAction();
@@ -62,7 +64,7 @@ export function KitSettingsView({ workspace, sourceIds, multiples }: Props) {
           </s-stack>
         </CollapsibleSection>
         <SourceLocationsCard locations={workspace.locations} sourceIds={sourceIds} />
-        <MultiplesCard multiples={multiples} />
+        <PackSizeCard packSizes={packSizes} labels={labels} collections={workspace.collections} />
         <LinkKitModal
           open={linking}
           existing={workspace.kits}

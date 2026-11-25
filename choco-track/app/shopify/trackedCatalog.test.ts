@@ -150,14 +150,17 @@ describe('loadTransferSettings', () => {
     const client = fakeClient({
       currentAppInstallation: {
         metafield: { value: JSON.stringify([W]) },
-        multiples: { value: JSON.stringify({ default: 10, byName: { mini: 50 } }) },
+        packSizes: { value: JSON.stringify({ default: 10, groups: [{ size: 50, variantIds: ['gid://shopify/ProductVariant/1'] }] }) },
       },
     });
-    await expect(loadTransferSettings(client)).resolves.toEqual({ sourceIds: [W], multiples: { fallback: 10, byName: { mini: 50 } } });
+    await expect(loadTransferSettings(client)).resolves.toEqual({
+      sourceIds: [W],
+      packSizes: { defaultSize: 10, groups: [{ size: 50, variantIds: ['gid://shopify/ProductVariant/1'] }] },
+    });
   });
-  it('uses the built-in pack sizes (5, and 100 for minis) when none are saved', async () => {
-    const client = fakeClient({ currentAppInstallation: { metafield: null, multiples: null } });
-    await expect(loadTransferSettings(client)).resolves.toEqual({ sourceIds: [], multiples: { fallback: 5, byName: { mini: 100 } } });
+  it('ships one at a time, with no groups, when none are saved', async () => {
+    const client = fakeClient({ currentAppInstallation: { metafield: null, packSizes: null } });
+    await expect(loadTransferSettings(client)).resolves.toEqual({ sourceIds: [], packSizes: { defaultSize: 1, groups: [] } });
   });
 });
 
@@ -177,7 +180,7 @@ describe('loadInventoryReport', () => {
     const report = await loadInventoryReport(routedClient(routes()));
     expect(report.locations).toEqual([{ id: W, name: 'Warehouse' }]);
     expect(report.sourceIds).toEqual([W]);
-    expect(report.multiples).toEqual({ fallback: 5, byName: { mini: 100 } });
+    expect(report.packSizes).toEqual({ defaultSize: 1, groups: [] });
     expect(report.products.map((p) => p.title)).toEqual(['Rum']);
     expect(report.levels).toEqual({ v1: { [W]: { available: 9, incoming: 1 } } });
     expect(report.pending).toEqual({});

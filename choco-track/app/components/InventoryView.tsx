@@ -88,8 +88,8 @@ function LoadedInventory({ report, collections, shopHandle, refreshing, onRefres
   const summary = lowSummary(variants.filter(hasTargets), levels, pending);
   const needTargets = productsWithoutTargets(products);
   const plan = useMemo(
-    () => planTransfers({ products, levels, pending, sourceIds: report.sourceIds, locations: report.locations, multiples: report.multiples }),
-    [products, levels, pending, report.sourceIds, report.locations, report.multiples],
+    () => planTransfers({ products, levels, pending, sourceIds: report.sourceIds, locations: report.locations, packSizes: report.packSizes }),
+    [products, levels, pending, report.sourceIds, report.locations, report.packSizes],
   );
   const truncated = products.filter((p) => p.truncated);
   const trackedIds = useMemo(() => new Set(products.map((p) => p.id)), [products]);

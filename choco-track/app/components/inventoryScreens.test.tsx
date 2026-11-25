@@ -5,7 +5,7 @@ import type { ReportProduct, ReportVariant } from "../shopify/trackedCatalog";
 import { InventoryTable } from "./InventoryTable";
 import { CreatedTransferLinks } from "./CreatedTransferLinks";
 import { KitSettingsView } from "./KitSettingsView";
-import { MultiplesCard } from "./MultiplesCard";
+import { PackSizeCard } from "./PackSizeCard";
 import { SourceLocationsCard } from "./SourceLocationsCard";
 import { SuggestedTransfersModal } from "./SuggestedTransfersModal";
 
@@ -170,23 +170,49 @@ describe("CreatedTransferLinks", () => {
   });
 });
 
-describe("MultiplesCard", () => {
-  const html = renderToStaticMarkup(<MultiplesCard multiples={{ fallback: 5, byName: { mini: 100 } }} />);
-  it("shows the default and the overrides by variant name", () => {
-    expect(html).toContain(">Send in multiples of</summary>");
-    expect(html).toContain('label="Default"');
+describe("PackSizeCard", () => {
+  const V1 = "gid://shopify/ProductVariant/1";
+  const V2 = "gid://shopify/ProductVariant/2";
+  const V3 = "gid://shopify/ProductVariant/3";
+  const packSizes = { defaultSize: 1, groups: [{ size: 5, variantIds: [V1] }, { size: 100, variantIds: [V2, V3] }] };
+  const labels = {
+    [V1]: { title: "Rum Caramel - 60g Bar", sku: "BAR-RUM" },
+    [V2]: { title: "Bolivia 72%", sku: "MIN-BOL-RAR", group: "Rare" },
+  };
+  const html = renderToStaticMarkup(<PackSizeCard packSizes={packSizes} labels={labels} collections={[]} />);
+  it("is headed Pack Size, with the default and each group's size", () => {
+    expect(html).toContain(">Pack Size</summary>");
+    expect(html).not.toContain("Send in multiples of");
+    expect(html).toContain('label="Default pack size"');
+    expect(html).toContain('value="1"');
+    expect(html).toContain('label="Pack size, group 1"');
     expect(html).toContain('value="5"');
-    expect(html).toContain("mini");
+    expect(html).toContain('label="Pack size, group 2"');
     expect(html).toContain('value="100"');
-    expect(html).toContain("Save pack sizes");
   });
-  it("starts folded away", () => {
+  it("lists the variants in each group by name, with the category and SKU", () => {
+    expect(html).toContain("Rum Caramel - 60g Bar");
+    expect(html).toContain("BAR-RUM");
+    expect(html).toContain("Bolivia 72%");
+    expect(html).toContain("Rare - MIN-BOL-RAR");
+    expect(html).toContain("1 variant<");
+    expect(html).toContain("2 variants<");
+  });
+  it("says so when a listed variant no longer exists", () => {
+    expect(html).toContain("A variant that was deleted");
+  });
+  it("offers adding products, adding a group and saving", () => {
+    expect(html).toContain("Add products");
+    expect(html).toContain("Add a pack size group");
+    expect(html).toContain("Save pack sizes");
+    expect(html).toContain("Remove group");
+  });
+  it("starts folded away, and explains the empty case", () => {
     expect(html).toContain("<details");
     expect(html).not.toContain(" open");
+    const empty = renderToStaticMarkup(<PackSizeCard packSizes={{ defaultSize: 1, groups: [] }} labels={{}} collections={[]} />);
+    expect(empty).toContain("No groups: every variant uses the default.");
     expect(renderToStaticMarkup(<SourceLocationsCard locations={locations} sourceIds={[]} />)).toMatch(/<details(?![^>]* open)/);
-  });
-  it("lets a variant name be added", () => {
-    expect(html).toContain("Add an override");
   });
 });
 
@@ -195,7 +221,7 @@ vi.mock("../hooks/useSettingsAction", () => ({ useSettingsAction: () => ({ busy:
 describe("KitSettingsView", () => {
   const kit = (id: string, title: string, kitSize: number) => ({ id, title, sku: `S${kitSize}`, kitSize, inventoryItemId: `i${id}`, productId: "p", price: "1.00" }) as never;
   const workspace = { locations, collections: [], kits: [kit("a", "Sampler 6", 6), kit("b", "Sampler 8", 8)], stock: {} };
-  const html = renderToStaticMarkup(<KitSettingsView workspace={workspace} sourceIds={[]} multiples={{ fallback: 5, byName: {} }} />);
+  const html = renderToStaticMarkup(<KitSettingsView workspace={workspace} sourceIds={[]} packSizes={{ defaultSize: 1, groups: [] }} labels={{}} />);
   it("folds every kit behind one closed Sampler Kits section", () => {
     expect(html).toContain(">Sampler Kits</summary>");
     expect(html.match(/>Sampler Kits<\/summary>/g)).toHaveLength(1);
@@ -213,7 +239,7 @@ describe("KitSettingsView", () => {
     expect(button).toBeLessThan(html.indexOf("Transfer sources"));
   });
   it("opens the section with a warning when there are no kits, so the button is in reach", () => {
-    const empty = renderToStaticMarkup(<KitSettingsView workspace={{ ...workspace, kits: [] }} sourceIds={[]} multiples={{ fallback: 5, byName: {} }} />);
+    const empty = renderToStaticMarkup(<KitSettingsView workspace={{ ...workspace, kits: [] }} sourceIds={[]} packSizes={{ defaultSize: 1, groups: [] }} labels={{}} />);
     expect(empty).toMatch(/<details[^>]* open/);
     expect(empty).toContain("No kits yet");
     expect(empty).toContain(">Create a new kit</s-button>");
