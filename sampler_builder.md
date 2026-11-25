@@ -20,7 +20,7 @@ A Shopify app that assembles "sampler kits" from mini chocolate bar inventory, u
 | 7 Deploy | **Live and hardened (2026-11-24).** `https://chocotrack.franson.nyc` on a 512 MB Ubuntu 26.04 Droplet (192.241.157.72), Let's Encrypt certificate, automatic builds from `main` and a gated deploy by image digest through a restricted SSH key. Production Shopify app "ChocoTrack Production" is released on the real hostname. The store owner tested Inventory, Assemble, Disassemble, Settings and printing on it in the dev store (all good). Left: store-team acceptance testing, custom distribution, a larger Droplet |
 | Security review | **Done 2026-11-23 to 24** (app code, CI/CD, host). Fixes shipped; deferred items are listed under "Security review" below |
 
-**Next, in order:** (1) **acceptance testing with the store team** on the production app (checklist in `inventory_tracker.md`); (2) after acceptance, set up **custom distribution** for the real store (Dev Dashboard, the app's Distribution page: enter the store's `.myshopify.com` domain, generate the install link, install as owner or staff who can install apps; the choice is one-way, so confirm the store first); (3) before real staff use, a Droplet with 1 GB or more RAM; (4) after acceptance, the deferred security items (second dev store to test cross-shop isolation live) and the held-back dependency upgrades (see "Security review"); (5) optional fake-Shopify browser suite in CI; (6) ask the store team whether the screens feel faster, then discuss deferred features.
+**Next, in order:** (1) **acceptance testing with the store team** on the production app (checklist in `inventory_tracker.md`); (2) after acceptance, set up **custom distribution** for the real store (Dev Dashboard, the app's Distribution page: enter the store's `.myshopify.com` domain, generate the install link, install as owner or staff who can install apps; the choice is one-way, so confirm the store first); (3) before real staff use, a Droplet with 1 GB or more RAM; (4) after acceptance, the deferred security items (second dev store to test cross-shop isolation live) and the held-back dependency upgrades (see "Security review"); (5) optional fake-Shopify browser suite in CI; (6) ask the store team whether the screens feel faster, then discuss deferred features; (7) **barcode sheet printing** (planned, with open questions, under "Future development").
 
 ## Decisions
 
@@ -206,6 +206,30 @@ Three read-only reviews (app code, CI/CD and secrets, the live host through `dro
 - Not done: image signing with cosign (needs cosign on the host; the digest pin covers a swapped tag), a rootless Docker or sudo-rule deploy user, and the `ubuntu` account (still holds uid 1000, so the container user owns `data/` as "ubuntu").
 
 Re-run `dropaudit.sh` after any host change and compare with the last result.
+
+### Future development (planned, not started)
+
+#### Barcode sheet printing
+
+Print scannable barcodes for the store's SKUs from inside the app. **Not built.** Today the only output is two one-off HTML files made outside the app from `Mini SKUs.csv` (`Mini_Barcodes.html`, a table, and `Mini_SKU_Pages.html`, one page per category), kept in `/Users/tigfox/Documents/River Sea/`. The pages and layout in `Mini_SKU_Pages.html` were approved and are the target: the category as the title, and each flavor's barcode, name and SKU spaced evenly down a letter-size page.
+
+**Plan** (tests first, then code, then review, one PR; same process as the rest of the app):
+1. **Pure helpers (tested), in `app/lib/`:** group variants by category product (the `Mini Bars - X` product that holds the flavors), and build a Code 128 SVG for a SKU with `bwip-js` (a new dependency, rendered in the browser, nothing stored). Validate SKUs: blank or unsupported characters are reported, never drawn as an empty barcode.
+2. **New route `app/barcodes`** (Settings-style page, link in the sidebar). It reads variants through the same lookup as the pickers and offers a collection or category choice; the minis are the default.
+3. **Layout:** one page per category, title plus flavors spaced evenly. Names come from the existing display-name logic (`variantNames`), so the sheet says "Bolivia 72%" and not the slug, with the SKU printed as text under each bar. It reuses the existing print stylesheet (`#print-root`, as the pick list does) and a **Print** button; pages break per category.
+4. **Sidebar link and docs.**
+5. **Browser test:** open the page, check a barcode renders for a known SKU (for example `MIN-BOL-RAR`), and that variants with no SKU are handled as decided below.
+
+**Open questions (owner to decide before building):**
+- [ ] Variants with no SKU: skip them, or list them on the sheet with a "no SKU" warning?
+- [ ] Printing: a Print button per category as well as one for the whole set?
+- [ ] Beyond the minis: should the page offer other collections, such as the 60g bars (only some have SKUs)?
+
+**Dependencies and notes:**
+- The sheets need SKUs in the store. The `MIN-…` SKUs were added to the **dev** store only (by the importer); the live store's mini variants have none, so they must be added there first (or the sheets will show "no SKU" for every mini).
+- Format: Code 128 (the SKUs are alphanumeric, so they cannot be UPC or EAN). GTINs such as `850092274243` exist only on some variants and would be a separate option (UPC-A) if ever wanted.
+- A scannable size matters: keep bars wide enough and keep the quiet zones; the reference pages use `bwip-js` scale 3, height 14 mm.
+- Rendering in the browser keeps the app database-free (the print path is the same one the pick list uses).
 
 ### Later
 
