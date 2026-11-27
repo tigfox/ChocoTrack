@@ -2,6 +2,7 @@ import { resolveSetup } from '../domain/setup';
 import { isMonitored, lowSummary, type LevelMap, type PendingMap } from '../domain/tracking';
 import type { GraphqlClient } from '../shopify/client';
 import { loadInventoryReport, loadTransferSettings, type InventoryReport, type ReportProduct } from '../shopify/trackedCatalog';
+import { ensureSetupState } from './ensureSetup';
 import { setupFacts } from './setupFacts';
 
 /** The sidebar count is looked up on every page view, so it is kept briefly rather than re-read each time. */
@@ -14,17 +15,21 @@ export interface LowStatus {
 }
 
 const cache = new Map<string, { readonly at: number; readonly status: LowStatus }>();
+/** Bumped by every forget, so a lookup that began before a change cannot store its older answer afterwards. */
+const generations = new Map<string, number>();
 
 export const readLowStatus = async (shop: string, compute: () => Promise<LowStatus>, now: number = Date.now()): Promise<LowStatus> => {
   const hit = cache.get(shop);
   if (hit && now - hit.at < LOW_COUNT_TTL_MS) return hit.status;
+  const generation = generations.get(shop) ?? 0;
   const status = await compute();
-  cache.set(shop, { at: now, status });
+  if ((generations.get(shop) ?? 0) === generation) cache.set(shop, { at: now, status });
   return status;
 };
 
 /** Called after a change that could alter the count, so the next look is fresh. */
 export const forgetLowCount = (shop: string): void => {
+  generations.set(shop, (generations.get(shop) ?? 0) + 1);
   cache.delete(shop);
 };
 
@@ -42,5 +47,7 @@ export const computeLowStatus = (report: Pick<InventoryReport, 'products' | 'lev
 export const lookupLowStatus = async (client: GraphqlClient): Promise<LowStatus> => {
   const { setup } = await loadTransferSettings(client);
   if (setup && !setup.completed) return { count: 0, setupNeeded: true };
-  return computeLowStatus(await loadInventoryReport(client));
+  const report = await loadInventoryReport(client);
+  // A store with no saved state is judged once, here, and written down (see ensureSetupState).
+  return computeLowStatus({ ...report, setup: await ensureSetupState(client, report) });
 };

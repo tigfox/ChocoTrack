@@ -3,6 +3,7 @@ import { useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { InventoryView } from "../components/InventoryView";
 import { shopHandle } from "../lib/transferLinks";
+import { ensureSetupState } from "../lib/ensureSetup";
 import { logError } from "../lib/logError";
 import { fromAdmin } from "../shopify/client";
 import { listCollections } from "../shopify/catalog";
@@ -17,7 +18,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const client = fromAdmin(admin);
   try {
     const [report, collections] = await Promise.all([loadInventoryReport(client), listCollections(client)]);
-    return { report, collections, error: undefined, shopHandle: handle };
+    // A store with no saved setup state is judged once and written down, so the page never infers it again mid-session.
+    const setup = await ensureSetupState(client, report);
+    return { report: { ...report, setup }, collections, error: undefined, shopHandle: handle };
   } catch (err) {
     logError("inventory report failed", err);
     return { report: undefined, collections: [], error: friendlyMessage(err), shopHandle: handle };

@@ -4,9 +4,10 @@ import type { LevelMap } from '../domain/tracking';
 import type { GraphqlClient } from '../shopify/client';
 import { friendlyMessage } from '../shopify/errors';
 import { createDraftTransfer, savePackSizes, saveSetup, saveSourceIds, saveVariantTargets, setProductFlag, setVariantUntracked } from '../shopify/inventoryWrites';
-import { loadInventoryReport, loadLevels, loadProducts, type ReportProduct } from '../shopify/trackedCatalog';
+import { loadInventoryReport, loadLevels, loadProducts, loadTransferSettings, type ReportProduct } from '../shopify/trackedCatalog';
 import { parseFlagInput, parsePackSizesInput, parseSetupInput, parseSourcesInput, parseTargetsInput, parseTransferInput, parseUntrackedInput } from './inventoryInput';
 import { logError } from './logError';
+import { ensureSetupState } from './ensureSetup';
 import { planTransfers } from './planTransfers';
 import { setupFacts } from './setupFacts';
 
@@ -82,17 +83,28 @@ const SETUP_MESSAGES = {
   dismissGuide: 'Setup guide closed.',
 } as const;
 
+const NO_FACTS = { flaggedProducts: 0, monitoredVariants: 0, lowVariants: 0, sourcesSaved: false };
+
 /**
- * A press of a setup guide button. Everything is decided here from fresh Shopify data, never from the browser.
- * Restarting needs no read; every other action reads the report so an older install is not switched off by accident.
+ * A press of a setup guide button. Everything is decided here from Shopify, never from the browser. Restarting needs no read.
+ * The full report is read only when it is needed: to check that Turn on alerts is allowed, or to decide a store that has no
+ * saved state yet. Other presses need just the saved state.
  */
 const setupIntent = async (client: GraphqlClient, raw: unknown): Promise<InventoryResponse> => {
   const parsed = parseSetupInput(raw);
   if (!parsed.ok) return fail(parsed.error);
   const { action } = parsed.value;
-  const report = action === 'restart' ? undefined : await loadInventoryReport(client);
-  const facts = report ? setupFacts(report) : { flaggedProducts: 0, monitoredVariants: 0, lowVariants: 0, sourcesSaved: false };
-  const result = applySetupAction(report?.setup, action, facts);
+  let stored: SetupState | undefined;
+  let facts = NO_FACTS;
+  if (action !== 'restart') {
+    stored = (await loadTransferSettings(client)).setup;
+    if (action === 'complete' || stored === undefined) {
+      const report = await loadInventoryReport(client);
+      stored = await ensureSetupState(client, report);
+      facts = setupFacts(report);
+    }
+  }
+  const result = applySetupAction(stored, action, facts);
   if (!result.ok) return fail(result.error);
   await saveSetup(client, result.state);
   return { ok: true, message: SETUP_MESSAGES[action], setup: result.state };

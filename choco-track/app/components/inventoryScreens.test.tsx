@@ -43,7 +43,7 @@ const noop = () => Promise.resolve({ ok: true as const, message: "" });
 
 describe("InventoryTable", () => {
   it("has a column per location and product rows down the left", () => {
-    const html = renderToStaticMarkup(<InventoryTable groups={groups()} locations={locations} editing={false} onSave={noop} />);
+    const html = renderToStaticMarkup(<InventoryTable groups={groups()} locations={locations} editing={false} alerts onSave={noop} />);
     expect(html).toContain(">Warehouse</th>");
     expect(html).toContain(">Market Store</th>");
     expect(html).toContain(">Product</th>");
@@ -51,7 +51,7 @@ describe("InventoryTable", () => {
     expect(html).toContain("SKU-mini");
   });
   it("groups variants of one product under its name and shows single-variant products directly", () => {
-    const html = renderToStaticMarkup(<InventoryTable groups={groups()} locations={locations} editing={false} onSave={noop} />);
+    const html = renderToStaticMarkup(<InventoryTable groups={groups()} locations={locations} editing={false} alerts onSave={noop} />);
     expect(html).toContain('class="inv-group"');
     expect(html.match(/class="inv-group"/g)).toHaveLength(1); // Rum Caramel only; Haiti has one default variant
     expect(html).toContain(">Mini<");
@@ -59,7 +59,7 @@ describe("InventoryTable", () => {
     expect(html).toContain(">Haiti<");
   });
   it("shows count, target, status badges and what is on the way", () => {
-    const html = renderToStaticMarkup(<InventoryTable groups={groups()} locations={locations} editing={false} onSave={noop} />);
+    const html = renderToStaticMarkup(<InventoryTable groups={groups()} locations={locations} editing={false} alerts onSave={noop} />);
     expect(html).toContain("min 100 / max 300");
     expect(html).toContain("min 10 / max 30");
     expect(html).toContain('tone="critical">Low<'); // mini at the market: 4 < 10
@@ -76,17 +76,17 @@ describe("InventoryTable", () => {
     expect(html).toContain("min 10 / max 30");
     expect(html).toContain("+20 incoming");
   });
-  it("shows alerts by default", () => {
-    const html = renderToStaticMarkup(<InventoryTable groups={groups()} locations={locations} editing={false} onSave={noop} />);
+  it("shows alerts when they are on", () => {
+    const html = renderToStaticMarkup(<InventoryTable groups={groups()} locations={locations} editing={false} alerts onSave={noop} />);
     expect(html).toContain("inv-cell inv-low");
   });
   it("shows drafts that are on the way", () => {
-    const html = renderToStaticMarkup(<InventoryTable groups={groups({ mini: { [M]: 8 } })} locations={locations} editing={false} onSave={noop} />);
+    const html = renderToStaticMarkup(<InventoryTable groups={groups({ mini: { [M]: 8 } })} locations={locations} editing={false} alerts onSave={noop} />);
     expect(html).toContain("+8 in draft");
     expect(html).toContain("Low, restock on the way");
   });
   it("in edit mode shows min and max fields per location and a save button per row", () => {
-    const html = renderToStaticMarkup(<InventoryTable groups={groups()} locations={locations} editing onSave={noop} />);
+    const html = renderToStaticMarkup(<InventoryTable groups={groups()} locations={locations} editing alerts onSave={noop} />);
     expect(html).toContain('label="Market Store minimum"');
     expect(html).toContain('label="Market Store maximum"');
     expect(html).toContain("Save</s-button>");
@@ -94,7 +94,7 @@ describe("InventoryTable", () => {
   });
   it("only has columns for the locations it is given", () => {
     const only = buildReportGroups({ products, levels, pending: {}, locationIds: [W], filters: { search: "", lowOnly: false, showUntargeted: false } }).groups;
-    const html = renderToStaticMarkup(<InventoryTable groups={only} locations={[locations[0] as (typeof locations)[number]]} editing={false} onSave={noop} />);
+    const html = renderToStaticMarkup(<InventoryTable groups={only} locations={[locations[0] as (typeof locations)[number]]} editing={false} alerts onSave={noop} />);
     expect(html).toContain(">Warehouse</th>");
     expect(html).not.toContain("Market Store");
   });
@@ -105,13 +105,13 @@ describe("InventoryTable untracked switch", () => {
   const rows = (list: ReportProduct[], showUntracked: boolean) =>
     buildReportGroups({ products: list, levels, pending: {}, locationIds: [W, M], filters: { search: "", lowOnly: false, showUntargeted: false, showUntracked } }).groups;
   it("puts an Untracked checkbox on every variant row, checked for an untracked one", () => {
-    const html = renderToStaticMarkup(<InventoryTable groups={rows([off], true)} locations={locations} editing={false} onSave={noop} onUntracked={noop} />);
+    const html = renderToStaticMarkup(<InventoryTable groups={rows([off], true)} locations={locations} editing={false} alerts onSave={noop} onUntracked={noop} />);
     expect(html.match(/label="Untracked"/g)).toHaveLength(2); // Mini (switched off, shown on request) and Full
     expect(html.match(/<s-checkbox[^>]*label="Untracked"[^>]*checked/g)).toHaveLength(1); // only Mini is checked
     expect(html).toContain("opacity");
   });
   it("leaves it unchecked for a tracked variant", () => {
-    const html = renderToStaticMarkup(<InventoryTable groups={groups()} locations={locations} editing={false} onSave={noop} onUntracked={noop} />);
+    const html = renderToStaticMarkup(<InventoryTable groups={groups()} locations={locations} editing={false} alerts onSave={noop} onUntracked={noop} />);
     expect(html).toContain('label="Untracked"');
     expect(html).not.toMatch(/<s-checkbox[^>]*label="Untracked"[^>]*checked/);
   });

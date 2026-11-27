@@ -114,3 +114,50 @@ describe('lookupLowStatus', () => {
     await expect(lookupLowStatus(routedClient(routes()))).resolves.toEqual({ count: 1, setupNeeded: false });
   });
 });
+
+describe('readLowStatus: a change during a lookup', () => {
+  afterEach(() => forgetLowCount('r.myshopify.com'));
+  it('does not keep an answer that began before the change', async () => {
+    let release: (s: { count: number; setupNeeded: boolean }) => void = () => undefined;
+    const slow = new Promise<{ count: number; setupNeeded: boolean }>((resolve) => {
+      release = resolve;
+    });
+    const first = readLowStatus('r.myshopify.com', () => slow, 0);
+    forgetLowCount('r.myshopify.com'); // alerts were just turned on
+    release({ count: 0, setupNeeded: true }); // the older answer arrives late
+    await first;
+    const fresh = vi.fn().mockResolvedValue({ count: 4, setupNeeded: false });
+    await expect(readLowStatus('r.myshopify.com', fresh, 1)).resolves.toEqual({ count: 4, setupNeeded: false });
+    expect(fresh).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('lookupLowStatus: a new install keeps alerts off while targets are added', () => {
+  const W = 'gid://shopify/Location/1';
+  it('judges the store once, so a first target does not make it look like an older install', async () => {
+    let saved: string | undefined;
+    let withTargets = false;
+    const product = () => ({
+      nodes: withTargets
+        ? [{ id: 'p1', title: 'Rum', featuredMedia: null, variants: { nodes: [{ id: 'v1', title: 'Mini', sku: 's', image: null, inventoryItem: { id: 'i1' }, targets: { value: JSON.stringify({ [W]: { min: 5, max: 9 } }), compareDigest: 'd' } }], pageInfo: { hasNextPage: false } } }]
+        : [],
+    });
+    const client = routedClient({
+      'query SourceLocations': () => ({ currentAppInstallation: { metafield: null, packSizes: null, ...(saved ? { setup: { value: saved } } : {}) } }),
+      'query AppInstallationId': { currentAppInstallation: { id: 'gid://shopify/AppInstallation/1' } },
+      'mutation SetMetafields': (v: Record<string, unknown> | undefined) => {
+        saved = ((v?.metafields as Array<{ value: string }>)[0] as { value: string }).value;
+        return { metafieldsSet: { metafields: [{ key: 'setup', compareDigest: null }], userErrors: [] } };
+      },
+      'query Locations': { locations: { nodes: [{ id: W, name: 'Warehouse', isActive: true }] } },
+      'query FlaggedProducts': () => ({ products: { nodes: withTargets ? [{ id: 'p1' }] : [], pageInfo: { hasNextPage: false, endCursor: null } } }),
+      'query TrackedProducts': product,
+      'query TrackedLevels': { nodes: [{ id: 'v1', inventoryItem: { inventoryLevels: { nodes: [{ location: { id: W }, quantities: [{ name: 'available', quantity: 1 }, { name: 'incoming', quantity: 0 }] }] } } }] },
+      'query DraftTransfers': { inventoryTransfers: { nodes: [] } },
+    });
+    await expect(lookupLowStatus(client)).resolves.toEqual({ count: 0, setupNeeded: true });
+    expect(JSON.parse(saved ?? '{}')).toMatchObject({ completed: false });
+    withTargets = true; // the person flags a product and sets a target, all before pressing Turn on alerts
+    await expect(lookupLowStatus(client)).resolves.toEqual({ count: 0, setupNeeded: true });
+  });
+});

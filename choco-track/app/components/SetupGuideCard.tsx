@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { notifyAlertsChanged } from "../lib/alertsChanged";
 import { postInventory } from "../lib/postInventory";
 import { CollapsibleSection } from "./CollapsibleSection";
 
@@ -10,10 +11,12 @@ export function SetupGuideCard({ initialConfirming = false }: { readonly initial
 
   const restart = async () => {
     setBusy(true);
+    setMessage(undefined);
     const result = await postInventory({ intent: "setup", action: "restart" });
     setBusy(false);
     setConfirming(false);
     setMessage({ ok: result.ok, text: result.message });
+    if (result.ok) notifyAlertsChanged();
   };
 
   return (

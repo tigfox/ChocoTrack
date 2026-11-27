@@ -15,7 +15,7 @@ interface Props {
   readonly locations: readonly Location[];
   readonly editing: boolean;
   /** False while setup is unfinished: cells show no low or over marks. */
-  readonly alerts?: boolean;
+  readonly alerts: boolean;
   readonly onSave: (targets: Targets) => Promise<InventoryResponse>;
   /** Tells the page whether this row has edits that were not saved (only while editing). */
   readonly onDirty?: (variantId: string, dirty: boolean) => void;
@@ -28,7 +28,7 @@ const draftIds = (row: ReportRow, locations: readonly Location[]): readonly stri
   ...new Set([...locations.map((l) => l.id), ...Object.keys(row.variant.targets)]),
 ];
 
-export function VariantRow({ row, productTitle, showProduct, locations, editing, alerts = true, onSave, onDirty, onUntracked }: Props) {
+export function VariantRow({ row, productTitle, showProduct, locations, editing, alerts, onSave, onDirty, onUntracked }: Props) {
   const { variant } = row;
   const ids = draftIds(row, locations);
   const [drafts, setDrafts] = useState<Drafts>(() => targetsToDrafts(variant.targets, ids));

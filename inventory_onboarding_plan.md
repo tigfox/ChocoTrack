@@ -1,6 +1,6 @@
 # Plan: inventory alert onboarding, and no alerts until setup is done
 
-Written 2026-11-27 from early store-team feedback. **Plan only; nothing is built.** Fits into `inventory_tracker.md` (the Inventory section) and uses the same process as the rest of the app: tests first, then code, then review, one PR, deployed by the owner.
+Written 2026-11-27 from early store-team feedback. **Status (2026-11-27): built on branch `feat/inventory-setup-guide`, tested in the browser against the dev store, waiting for the PR review and human testing.** See "As built" and "Human test checklist" at the end. Fits into `inventory_tracker.md` (the Inventory section) and uses the same process as the rest of the app: tests first, then code, then review, one PR, deployed by the owner.
 
 ## The two requirements
 
@@ -65,13 +65,15 @@ While the guide is open the table stays usable (step 2 needs it), but with the a
 
 ### Where the setup state is stored
 
-One JSON metafield on the app installation, beside the existing ones: `$app:inventory` / `setup`, e.g. `{ "completed": true, "at": "2026-11-27T…", "transfersSkipped": false, "guideDismissed": false }`. No database, same pattern as `sources` and `pack_sizes`. It is read in the **same query** as those two (`SOURCES_QUERY` in `trackedCatalog.ts`), so there is no extra request.
+One JSON metafield on the app installation, beside the existing ones: `$app:inventory` / `setup`, e.g. `{ "completed": true, "transfersSkipped": false, "guideDismissed": false }`. No database, same pattern as `sources` and `pack_sizes`. It is read in the **same query** as those two (`SOURCES_QUERY` in `trackedCatalog.ts`), so there is no extra request.
 
 Three states: **absent** (never set), `completed: true`, `completed: false` (restarted).
 
 ### Existing installs (the dev store, and any other already in use)
 
-An install with no stored state **and** at least one monitored variant is treated as already complete, so nothing changes for the dev store (29 products flagged with targets). An install with no stored state and nothing monitored shows the guide. This is a pure function over the report, so it needs no migration or write. **Restart setup guide** (Settings) writes `completed: false`, which overrides the rule. That button is also how the guide is tested on the dev store.
+An install with no stored state **and** at least one monitored variant is already in use, so it is set up (nothing changes for the dev store: 29 products flagged with targets). An install with no stored state and nothing monitored is new, so it gets the guide.
+
+**This is decided once and written down** (`ensureSetupState`, run by the Inventory loader, the sidebar lookup and the setup action). The first plan inferred it live on every read, and review found the flaw: on a new install, setting the first target would make the store look like an old one and switch alerts on, and hide the guide, before **Turn on alerts**. Now a new store is saved as `completed: false` at its first look and an old one as complete with the guide closed; nothing is inferred after that. **Restart setup guide** (Settings) writes `completed: false` again, and is also how the guide is tested on the dev store.
 
 ### The gate is one pure function
 
@@ -109,9 +111,35 @@ Release follows the usual route: I open the PR; the owner reviews, merges and ap
 - **Step 2 is the heavy one.** Setting min and max for every variant is the long part of onboarding. The guide only requires one; it should say clearly that more can be added any time. Bulk entry (copy a target to many variants) is a later idea, not in this plan.
 - **Draft transfers and the live store.** Nothing here touches Shopify transfers; step 3 only links to the existing Settings cards.
 
-## Open questions for the owner
+## Decisions (owner, 2026-11-27)
 
-1. **Required steps.** Is "one flagged product plus one variant with targets" enough to allow **Turn on alerts**, or should transfer sources also be required? (Recommendation: not required, they only affect suggestions.)
-2. **While the guide is open, show the table with alerts off, or hide the table until step 2?** (Recommendation: show it, because step 2 happens in it.)
-3. **A nudge in the sidebar** (`Inventory (setup)`) while incomplete? (Recommendation: yes.)
-4. **Should staff be able to turn alerts off again** after finishing, as a normal setting rather than a restart for testing? (Recommendation: same button, relabelled "Pause alerts and restart setup".)
+1. **Required steps:** a flagged product plus one variant with targets. Transfer sources are optional.
+2. **Table:** hidden until step 1 is done (a product is flagged). After that it shows, with alerts off, so targets can be set in it.
+3. **Sidebar:** reads `Inventory (setup)` while setup is unfinished.
+4. **Pausing alerts later:** the Settings button "Pause alerts and restart setup" (default taken from the recommendation).
+
+## As built
+
+- **Domain** `app/domain/setup.ts` (34 tests): state, `resolveSetup`, `applySetupAction`, step helpers. `alertsEnabled` is the one gate.
+- **Server:** `setup` intent in `handleInventory` (actions `complete`, `restart`, `skipTransfers`, `dismissGuide`), validated by `parseSetupInput`; Turn on alerts is re-checked on fresh Shopify data; `restart` reads nothing; the others read only the saved state unless it is missing or the action is `complete`. `saveSetup` writes `$app:inventory/setup`. `ensureSetupState` decides a store with no saved state once.
+- **Sidebar:** `/app/api/inventory-low` returns `{count, setupNeeded}`, skips the report read while setup is unfinished, and the in-memory cache ignores an answer that began before a change. The sidebar refreshes at once when alerts are turned on or paused (`alertsChanged`), not only on the next page.
+- **Screens:** `SetupGuide` (Shopify setup guide structure), `SetupGuideCard` on Settings, and `InventoryView` gating the banner, sidebar, badges and marks, Low only filter, Suggest transfers (button and dialog), source and targets nudges, and the truncated and drafts banners. `alerts` is a required prop on the cell, row and table so a new caller cannot forget it.
+- **Tests:** 846 unit and render tests, 99% lines. 24 browser tests (2 new) against the dev app, all passing: restart, no alert anywhere, finish the guide, alerts return and the sidebar updates, close the guide and it stays closed; and the server refusing an unknown action. The run leaves the dev store with alerts on and the guide closed.
+- **Reviews:** a code review and a security review ran on the diff. Both found the live legacy inference (fixed, see above). Also fixed: a slow older page load undoing a button press, the cache race, the sidebar showing an old number after a failed refresh, the setup action reading the whole report each time, a disabled Set targets with no explanation. Not done on purpose: de-duplicating overlapping sidebar requests and sharing the cache between server instances (one instance runs today; same as the other endpoints), and a digest check on the setup write (two tabs pressing different buttons in the same instant could drop one flag).
+
+## Not covered by the browser tests
+
+The dev store already has products and targets, so a **brand-new install** (empty report, table hidden, first product flagged from the guide) is covered by unit and render tests but not clicked through in a real browser. Check it on a fresh install: the live store.
+
+## Human test checklist
+
+On the dev store (open the app as usual; setup is already complete there):
+1. **Settings > Setup guide**: press **Pause alerts and restart setup**, confirm **Pause alerts now**. A banner says setup restarted.
+2. Open **Inventory**. The **Setup guide** card is on top with "N of 4 steps completed". The sidebar says `Inventory (setup)`. There is no red banner, no Low or Over max badges, no **Low only** filter and no **Suggest transfers** button. Counts and targets still show. There is no X on the guide.
+3. Open and close each step with its chevron, and collapse the whole guide. On the transfers step, **Skip** ticks it; **Open transfer settings** goes to Settings.
+4. On the last step, the text says how many variants are watched and how many are low. Press **Turn on alerts**. Within a moment: the red banner and badges are back, **Suggest transfers** is back, the sidebar reads `Inventory (N)`, and the guide shows 4 of 4 with an X.
+5. Press the **X**: the guide goes, and stays gone after a reload.
+6. Look at the guide in a narrow browser window and in dark mode if the admin is set that way.
+
+On a fresh install (the live store, later):
+7. Opening Inventory shows only the guide (no table). **Add products** flags a product and the table appears with its variants in edit mode; set one minimum and maximum, save the row. The guide ticks steps 1 and 2 with a toast, and alerts stay **off** until **Turn on alerts** is pressed. Nothing should turn alerts on by itself, even after more targets are saved.

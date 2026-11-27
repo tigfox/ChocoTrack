@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRevalidator } from "react-router";
 import { resolveSetup, type SetupAction } from "../domain/setup";
 import { isMonitored, lowSummary, productsWithoutTargets } from "../domain/tracking";
 import type { Targets } from "../domain/targets";
 import type { Collection } from "../domain/types";
+import { notifyAlertsChanged } from "../lib/alertsChanged";
 import { browserStorage } from "../lib/browserStorage";
 import type { CreatedTransfer, InventoryResponse } from "../lib/handleInventory";
 import { planTransfers } from "../lib/planTransfers";
@@ -71,6 +72,9 @@ function LoadedInventory({ report, collections, shopHandle, refreshing, onRefres
   const [addOpen, setAddOpen] = useState(false);
   const [transfersOpen, setTransfersOpen] = useState(false);
   const [storedSetup, setStoredSetup] = useState(report.setup);
+  // The setup state the last report carried. A report that carries the same one is not news, so a slow older response
+  // cannot undo what a button press just saved.
+  const reportSetup = useRef(JSON.stringify(report.setup));
   const [setupBusy, setSetupBusy] = useState<SetupAction | undefined>();
   const [setupError, setSetupError] = useState<string | undefined>();
 
@@ -79,7 +83,11 @@ function LoadedInventory({ report, collections, shopHandle, refreshing, onRefres
     setProducts((prev) => reconcileProducts(report.products, prev, flagChanges));
     setLevels((prev) => mergeLevels(prev, report.levels));
     setPending(report.pending);
-    setStoredSetup(report.setup);
+    const incoming = JSON.stringify(report.setup);
+    if (incoming !== reportSetup.current) {
+      reportSetup.current = incoming;
+      setStoredSetup(report.setup);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [report]);
 
@@ -165,6 +173,7 @@ function LoadedInventory({ report, collections, shopHandle, refreshing, onRefres
     setSetupBusy(undefined);
     if (!result.ok) return setSetupError(result.message);
     if (result.setup) setStoredSetup(result.setup);
+    notifyAlertsChanged();
   };
 
   const openTargets = () => {
@@ -313,6 +322,7 @@ function LoadedInventory({ report, collections, shopHandle, refreshing, onRefres
       </s-stack>
 
       <AddProductsModal open={addOpen} collections={collections} trackedIds={trackedIds} onClose={() => setAddOpen(false)} onFlag={flag} />
+      {alerts && (
       <SuggestedTransfersModal
         open={transfersOpen}
         plan={plan}
@@ -324,6 +334,7 @@ function LoadedInventory({ report, collections, shopHandle, refreshing, onRefres
         onCreate={createTransfers}
         onCreated={created}
       />
+      )}
     </s-page>
   );
 }

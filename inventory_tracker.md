@@ -181,6 +181,10 @@ Its saved targets are kept, so unticking the box restores it as it was.
 
 Human test checklist step 6 changes: quantities are whole packs of each variant's group size (default 1), a line that was rounded up says so, and after creating a draft the **Open draft** link opens it in Shopify. New steps: on **Settings**, make a pack size group (for example 100), add the minis to it with **Add products**, save, reload (the group and the variant names stay) and see the suggestions change; try 0 or 2.5 (a message, nothing saved), and add a variant that is already in another group (it moves).
 
+### Change 4: setup guide, and no alerts until it is finished (built 2026-11-27, waiting for review and human testing)
+
+A four-step **Setup guide** on the Inventory homepage (products, targets, optional transfers, **Turn on alerts**), built to Shopify's setup guide pattern. Until alerts are turned on, nothing alerts: no sidebar count (it reads `Inventory (setup)`), red banner, Low or Over max marks, Low only filter, Suggest transfers or nudges, and the table is hidden until a product is flagged. Stored as `$app:inventory/setup`; a store already in use is set up automatically (decided once at the first look). **Settings > Setup guide** restarts it. Plan, as-built notes and the human checklist: [`inventory_onboarding_plan.md`](inventory_onboarding_plan.md).
+
 ### Settings page layout
 
 Every section on Settings is folded behind a disclosure triangle and starts closed: **Sampler Kits** (all kits together, one triangle), **Transfer sources** and **Pack Size**. Kit size is now a typed number (1 to 48) on each kit and in Create kit (`CollapsibleSection`, built on the browser's details/summary because Polaris has no accordion). Contents stay loaded while folded, so unsaved edits survive. Checklist: open and close each card; edit a field, fold the card, reopen it and the edit is still there.

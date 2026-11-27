@@ -269,6 +269,11 @@ describe('handleInventory', () => {
       const out = await handleInventory(client, { intent: 'setup', action: 'skipTransfers' });
       expect(out).toMatchObject({ ok: true, setup: { completed: true, transfersSkipped: true } });
     });
+    it('skipping or closing reads only the saved state when there is one, not the whole report', async () => {
+      const client = routedClient({ ...writes, 'query SourceLocations': settings(state({ completed: true })) });
+      await expect(handleInventory(client, { intent: 'setup', action: 'skipTransfers' })).resolves.toMatchObject({ ok: true });
+      expect(client.calls.some((c) => c.query.includes('FlaggedProducts'))).toBe(false);
+    });
     it('closes the guide only when setup is complete', async () => {
       const done = routedClient(reportRoutes({ ...writes, 'query SourceLocations': settings(state({ completed: true })) }));
       await expect(handleInventory(done, { intent: 'setup', action: 'dismissGuide' })).resolves.toMatchObject({ ok: true, setup: state({ completed: true, guideDismissed: true }) });

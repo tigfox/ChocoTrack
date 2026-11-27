@@ -75,6 +75,7 @@ export function SetupGuide({ setup, facts, busy, error, onAddProducts, onSetTarg
   };
 
   const body = (id: SetupStepId): string => {
+    if (id === "targets" && !hasProducts) return "Add a product first, then say how low is too low at each location.";
     if (id !== "alerts") return COPY[id].body;
     if (setup.complete) return "Alerts are on.";
     return setup.canTurnOn ? `${preview(facts)} Alerts start as soon as you turn them on.` : "Finish the first two steps to turn on alerts.";

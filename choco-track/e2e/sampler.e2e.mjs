@@ -526,3 +526,99 @@ describe('Inventory: untracked variants', () => {
     }
   });
 });
+
+describe('Inventory: setup guide', () => {
+  // Restarts the guide from Settings, checks that nothing alerts, finishes the guide, checks that alerts return, and closes
+  // the guide. Needs tracked products with targets and at least one low cell (the dev store has them). It always ends with
+  // alerts on and the guide closed, which is how an install that predates the guide behaves.
+  const click = (locator) => locator.first().evaluate((el) => el.click());
+  const guide = () => app().locator('s-section[heading="Setup guide"]');
+  const navLabel = () => app().locator('s-app-nav s-link[href="/app/inventory"]').first().evaluate((el) => el.textContent.trim());
+  const waitFor = (fn, arg, timeout = 30_000) => app().waitForFunction(fn, arg, { timeout });
+  const lowBanners = () => app().evaluate(() => [...document.querySelectorAll('s-banner')].filter((b) => /below the minimum/.test(b.getAttribute('heading') ?? '')).length);
+  const lowBadges = () => app().evaluate(() => [...document.querySelectorAll('s-badge')].filter((b) => /^Low/.test(b.textContent.trim())).length);
+  const hasButton = (label) => app().evaluate((l) => [...document.querySelectorAll('s-button')].some((b) => b.textContent.trim() === l), label);
+  const hasButtonStarting = (prefix) => app().evaluate((p) => [...document.querySelectorAll('s-button')].some((b) => b.textContent.trim().startsWith(p)), prefix);
+  const progress = () => app().evaluate(() => /(\d) of 4 steps completed/.exec(document.querySelector('s-section[heading="Setup guide"]')?.textContent ?? '')?.[1]);
+  const restart = async () => {
+    await open('settings');
+    await app().locator('summary', { hasText: 'Setup guide' }).evaluate((el) => (el.parentElement.open = true));
+    await click(app().locator('s-button', { hasText: 'Pause alerts and restart setup' }));
+    await click(app().locator('s-button', { hasText: 'Pause alerts now' }));
+    await waitFor(() => /Setup restarted/.test(document.body.innerText));
+  };
+  // Leaves alerts on with the guide closed, whatever state a failed run left behind.
+  const restore = async () => {
+    await open('inventory');
+    await page.waitForTimeout(1_000);
+    if (await guide().count()) {
+      if (!(await hasButton('Dismiss guide')) && !(await app().locator('s-button[accessibilitylabel="Dismiss guide"]').count())) {
+        if (!(await hasButton('Turn on alerts'))) await click(app().locator('s-button[accessibilitylabel="Toggle Turn on alerts details"]'));
+        await click(app().locator('s-button', { hasText: /^Turn on alerts$/ }));
+        await waitFor(() => document.querySelector('s-button[accessibilitylabel="Dismiss guide"]'));
+      }
+      await click(app().locator('s-button[accessibilitylabel="Dismiss guide"]'));
+      await waitFor(() => !document.querySelector('s-section[heading="Setup guide"]'));
+    }
+  };
+
+  it('restarting pauses every alert; finishing the guide brings them back; the guide can be closed', async () => {
+    try {
+      await restart();
+      await open('inventory');
+      await guide().waitFor({ state: 'attached', timeout: 30_000 });
+
+      // The guide follows Shopify's pattern and ticks steps from the data.
+      assert.match(await guide().innerText(), /of 4 steps completed/);
+      assert.equal(await guide().locator('s-checkbox').count(), 4);
+      assert.equal(await app().locator('s-button[accessibilitylabel="Dismiss guide"]').count(), 0, 'no X while alerts are off');
+      assert.ok(Number(await progress()) >= 2, 'products and targets are already done in this store');
+
+      // Nothing alerts while setup is unfinished.
+      await waitFor(() => /\(setup\)/.test(document.querySelector('s-app-nav s-link[href="/app/inventory"]')?.textContent ?? ''));
+      assert.equal(await navLabel(), 'Inventory (setup)');
+      assert.equal(await lowBanners(), 0, 'no low banner');
+      assert.equal(await lowBadges(), 0, 'no low badges');
+      assert.equal(await hasButtonStarting('Suggest transfers'), false, 'no Suggest transfers');
+      assert.equal(await app().locator('s-checkbox[label="Low only"]').count(), 0, 'no low filter');
+      assert.ok((await app().locator('table').count()) > 0, 'the table is still there');
+
+      // Skip the optional step when it is open, then turn alerts on.
+      if (await hasButton('Skip')) {
+        const before = Number(await progress());
+        await click(app().locator('s-button', { hasText: /^Skip$/ }));
+        await waitFor((n) => document.querySelector('s-section[heading="Setup guide"]')?.textContent.includes(`${n + 1} of 4`), before);
+      }
+      if (!(await hasButton('Turn on alerts'))) await click(app().locator('s-button[accessibilitylabel="Toggle Turn on alerts details"]'));
+      assert.match(await guide().innerText(), /variants? (is|are) watched/);
+      await click(app().locator('s-button', { hasText: /^Turn on alerts$/ }));
+      await waitFor(() => document.querySelector('s-button[accessibilitylabel="Dismiss guide"]'));
+      assert.match(await guide().innerText(), /4 of 4 steps completed/);
+
+      // Alerts are back, and the sidebar looks again without a page change.
+      await waitFor(() => [...document.querySelectorAll('s-banner')].some((b) => /below the minimum/.test(b.getAttribute('heading') ?? '')));
+      assert.ok((await lowBadges()) > 0, 'low badges are back');
+      assert.equal(await hasButtonStarting('Suggest transfers'), true, 'Suggest transfers is back');
+      await waitFor(() => /^Inventory \(\d+\)$/.test(document.querySelector('s-app-nav s-link[href="/app/inventory"]')?.textContent.trim() ?? ''));
+
+      // Close the guide; it stays closed after a reload.
+      await click(app().locator('s-button[accessibilitylabel="Dismiss guide"]'));
+      await waitFor(() => !document.querySelector('s-section[heading="Setup guide"]'));
+      await open('inventory');
+      await page.waitForTimeout(1_000);
+      assert.equal(await guide().count(), 0, 'the guide stays closed');
+      assert.equal(await crashed(), false);
+    } finally {
+      await restore();
+    }
+  });
+
+  it('the server refuses a setup action it does not know, and changes nothing', async () => {
+    await open('inventory');
+    const bad = await app().evaluate(async () => {
+      const res = await fetch('/app/api/inventory', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ intent: 'setup', action: 'drop' }) });
+      return res.json();
+    });
+    assert.deepEqual(bad, { ok: false, message: 'Invalid request.' });
+  });
+});

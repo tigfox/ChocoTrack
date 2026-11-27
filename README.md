@@ -19,7 +19,7 @@ Prerequisites: Node 22.12+, [Shopify CLI](https://shopify.dev/docs/api/shopify-c
 ```bash
 cd choco-track
 npm install
-shopify app dev        # interactive: choose the dev store, opens the embedded app
+shopify app dev --config shopify.app.toml   # always name the dev config: the CLI can otherwise attach to the production app (see choco-track/e2e/README.md)
 ```
 
 Screens: **Inventory** (`/app/inventory`, the home page), **Assemble** (`/app/assemble`), **Disassemble** (`/app/disassemble`) and **Settings** (`/app/settings`: kits, categories and transfer source locations). Products are flagged for the Inventory report with the `choco_track.tracked` product metafield and given targets in the `choco_track.targets` variant metafield (both are set from the app). A kit is a variant whose product is tagged `choco-track-kit` and which has an integer metafield `choco_track.kit_size` (and optionally `choco_track.category`, a collection). Settings can mark an existing product as a kit (its inventory must be tracked) or create a new one. Mini bar flavors are variants of their category product (`Mini Bars - Rare`); a variant's `choco_track.display_name` metafield is the name shown in the app.
@@ -43,7 +43,7 @@ It expects locations named Warehouse, Factory, Market Store and Cafe (the live s
 
 ```bash
 npm run typecheck && npm run lint && npm run build
-npm run test:coverage                                # unit and render tests, 80% gate (658 tests, 99% lines)
+npm run test:coverage                                # unit and render tests, 80% gate (846 tests, 99% lines)
 LIVE_STORE=<store>.myshopify.com npm run test:live  # real queries + an assemble/disassemble round trip (net zero)
 ```
 

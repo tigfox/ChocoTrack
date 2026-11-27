@@ -1,7 +1,7 @@
 import type { CellView } from "../domain/tracking";
 
 /** One variant at one location: the count, its target, and what is on the way. */
-export function ReportCell({ cell, alerts = true }: { readonly cell: CellView; readonly alerts?: boolean }) {
+export function ReportCell({ cell, alerts }: { readonly cell: CellView; readonly alerts: boolean }) {
   // Until setup is finished nothing warns: a low or over cell looks like any other. Counts and targets still show.
   const status = alerts ? cell.status : cell.status === "untracked" ? "untracked" : "ok";
   if (status === "untracked") {
