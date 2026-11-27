@@ -177,6 +177,27 @@ describe('loadTransferSettings', () => {
   });
 });
 
+describe('loadTransferSettings: setup state', () => {
+  it('reads the saved setup state', async () => {
+    const client = fakeClient({
+      currentAppInstallation: { metafield: null, packSizes: null, setup: { value: JSON.stringify({ completed: true, transfersSkipped: true }) } },
+    });
+    await expect(loadTransferSettings(client)).resolves.toMatchObject({ setup: { completed: true, transfersSkipped: true, guideDismissed: false } });
+  });
+  it('leaves setup off when nothing was saved or it is unreadable', async () => {
+    for (const setup of [null, { value: 'nope' }]) {
+      const settings = await loadTransferSettings(fakeClient({ currentAppInstallation: { metafield: null, packSizes: null, setup } }));
+      expect('setup' in settings).toBe(false);
+    }
+  });
+  it('asks for the setup metafield in the same query as the other settings', async () => {
+    const client = fakeClient({ currentAppInstallation: { metafield: null } });
+    await loadTransferSettings(client);
+    expect(client.calls).toHaveLength(1);
+    expect(client.calls[0]?.query).toContain('"setup"');
+  });
+});
+
 describe('loadInventoryReport', () => {
   const levelsNode = { id: 'v1', inventoryItem: { inventoryLevels: { nodes: [{ location: { id: W }, quantities: [{ name: 'available', quantity: 9 }, { name: 'incoming', quantity: 1 }] }] } } };
   const routes = (over: Record<string, unknown> = {}) => ({
@@ -198,6 +219,11 @@ describe('loadInventoryReport', () => {
     expect(report.levels).toEqual({ v1: { [W]: { available: 9, incoming: 1 } } });
     expect(report.pending).toEqual({});
     expect(report.draftsError).toBeUndefined();
+  });
+  it('carries the saved setup state', async () => {
+    const setup = { value: JSON.stringify({ completed: false, transfersSkipped: false, guideDismissed: false }) };
+    const report = await loadInventoryReport(routedClient(routes({ 'query SourceLocations': { currentAppInstallation: { metafield: null, setup } } })));
+    expect(report.setup).toEqual({ completed: false, transfersSkipped: false, guideDismissed: false });
   });
   it('still returns the report, with a notice, when draft transfers cannot be read', async () => {
     const denied = new ShopifyApiError('Access denied for inventoryTransfers field. Required access: `read_inventory_transfers` access scope.');

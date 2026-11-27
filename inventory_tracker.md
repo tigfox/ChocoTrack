@@ -192,6 +192,32 @@ Every section on Settings is folded behind a disclosure triangle and starts clos
 - Rounding up can put a destination above its maximum; this is deliberate and flagged on the line.
 - Overrides match the variant name only, so renaming a variant in Shopify silently moves it back to the default.
 
+## Future development (planned, not started)
+
+### Inventory history graphs (requested by the store team, 2026-11-27)
+
+**Not built; implementation has not begun.** A page that graphs inventory levels over the last **30, 60 or 90 days** for an **arbitrary set of products**, at **each location**.
+
+**What the store team asked for**
+- Pick any set of products (not only tracked ones), choose 30 / 60 / 90 days, and see the stock level over time at every location.
+
+**Proposed shape (to confirm with the store team)**
+- A new **History** page (sidebar link), with a product picker (the same search as **Add products**, by name, SKU, barcode or collection), a 30 / 60 / 90 day switch, and one chart per location with a line per selected product. Where one product is selected, its minimum and maximum for that location are drawn as reference lines.
+- Measure: **available**, to match the Inventory report. Possibly an **on hand** toggle.
+- Charts follow the `dataviz` skill (accessible colors, light and dark, a table fallback). Location choice is remembered per browser, like the Inventory columns.
+
+**The hard part is the data, not the chart.** The app keeps no business records, and I have not verified that Shopify's Admin API exposes daily quantity history. Two routes, to be settled in a short spike before any build:
+1. **Read history from Shopify** (inventory adjustment history, or ShopifyQL if it offers a quantity-over-time dataset). Nothing to store, and the past 90 days exist on day one. Needs confirming that it is complete (sales, transfers, adjustments, receipts) and what scopes it needs.
+2. **Record our own daily snapshots** with a scheduled job on the Droplet. This needs a data store, which breaks the "Shopify only, no app database" decision, and there would be **no history until about 90 days after it starts**. Needs an explicit decision.
+
+**Open questions**
+- [ ] Is one chart per location (a line per product) or one chart per product (a line per location) easier to read for the store team? Maybe both, with a switch.
+- [ ] How many products at once (5? 20?) before the chart is unreadable?
+- [ ] Should minimum and maximum be drawn on multi-product charts?
+- [ ] If only snapshots are possible, is a graph that fills in over 90 days acceptable?
+
+**Phases when it is scheduled:** H0 spike on the data source; H1 pure series and range helpers (tested first); H2 the data read or snapshot job; H3 page and charts; H4 browser test, docs, review.
+
 ## Later
 
-Email or Slack alerts from a scheduled job, a history of counts and trends, auto-marking transfers ready, reorder suggestions for supplier purchase orders.
+Email or Slack alerts from a scheduled job, a history of counts and trends (see the graphs item above), auto-marking transfers ready, reorder suggestions for supplier purchase orders.

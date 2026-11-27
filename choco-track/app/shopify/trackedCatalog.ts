@@ -1,5 +1,6 @@
 import type { Location } from '../domain/types';
 import { DEFAULT_PACK_SIZES, parsePackSizes, type PackSizes } from '../domain/packSizes';
+import { parseSetup, type SetupState } from '../domain/setup';
 import { parseTargets } from '../domain/targets';
 import type { LevelMap, PendingMap, TrackedVariant } from '../domain/tracking';
 import { logError } from '../lib/logError';
@@ -18,6 +19,8 @@ export const TARGETS_METAFIELD = { namespace: 'choco_track', key: 'targets' } as
 export const SOURCES_METAFIELD = { namespace: '$app:inventory', key: 'sources' } as const;
 /** App-owned metadata on the app installation: the default pack size and the groups of variants with their own (the Pack Size setting). */
 export const PACK_SIZES_METAFIELD = { namespace: '$app:inventory', key: 'pack_sizes' } as const;
+/** App-owned metadata on the app installation: the setup guide state (alerts on, transfers skipped, guide closed). */
+export const SETUP_METAFIELD = { namespace: '$app:inventory', key: 'setup' } as const;
 /** Tag on every draft transfer the app creates, so its drafts can be found again. */
 export const TRANSFER_TAG = 'choco-track';
 
@@ -46,6 +49,8 @@ export interface InventoryReport {
   readonly locations: readonly Location[];
   readonly sourceIds: readonly string[];
   readonly packSizes: PackSizes;
+  /** Left off when it was never saved (a new install, or one that predates the setup guide). */
+  readonly setup?: SetupState;
   readonly products: readonly ReportProduct[];
   readonly levels: LevelMap;
   readonly pending: PendingMap;
@@ -271,6 +276,7 @@ const SOURCES_QUERY = `#graphql
     currentAppInstallation {
       metafield(namespace: "${SOURCES_METAFIELD.namespace}", key: "${SOURCES_METAFIELD.key}") { value }
       packSizes: metafield(namespace: "${PACK_SIZES_METAFIELD.namespace}", key: "${PACK_SIZES_METAFIELD.key}") { value }
+      setup: metafield(namespace: "${SETUP_METAFIELD.namespace}", key: "${SETUP_METAFIELD.key}") { value }
     }
   }
 `;
@@ -287,13 +293,21 @@ const parseSourceIds = (raw: string | undefined): readonly string[] => {
 export interface TransferSettings {
   readonly sourceIds: readonly string[];
   readonly packSizes: PackSizes;
+  readonly setup?: SetupState;
 }
 
 /** Transfer settings saved with the app, not in a database: ordered source locations and pack sizes. */
 export const loadTransferSettings = async (client: GraphqlClient): Promise<TransferSettings> => {
-  const data = await client<{ currentAppInstallation: { metafield: { value: string } | null; packSizes?: { value: string } | null } }>(SOURCES_QUERY);
-  const { metafield, packSizes } = data.currentAppInstallation;
-  return { sourceIds: parseSourceIds(metafield?.value), packSizes: packSizes ? parsePackSizes(packSizes.value) : DEFAULT_PACK_SIZES };
+  const data = await client<{
+    currentAppInstallation: { metafield: { value: string } | null; packSizes?: { value: string } | null; setup?: { value: string } | null };
+  }>(SOURCES_QUERY);
+  const { metafield, packSizes, setup } = data.currentAppInstallation;
+  const parsedSetup = parseSetup(setup?.value);
+  return {
+    sourceIds: parseSourceIds(metafield?.value),
+    packSizes: packSizes ? parsePackSizes(packSizes.value) : DEFAULT_PACK_SIZES,
+    ...(parsedSetup ? { setup: parsedSetup } : {}),
+  };
 };
 
 /** Ordered ids of the locations that supply transfers. */
@@ -304,7 +318,7 @@ const draftsUnavailable = (err: unknown): string =>
 
 /** Everything the Inventory screen needs, read with as much parallelism as the dependencies allow. */
 export const loadInventoryReport = async (client: GraphqlClient): Promise<InventoryReport> => {
-  const [locations, { sourceIds, packSizes }, products] = await Promise.all([
+  const [locations, { sourceIds, packSizes, setup }, products] = await Promise.all([
     listLocations(client),
     loadTransferSettings(client),
     findFlaggedProductIds(client).then((ids) => loadProducts(client, ids)),
@@ -320,5 +334,5 @@ export const loadInventoryReport = async (client: GraphqlClient): Promise<Invent
       },
     ),
   ]);
-  return { locations, sourceIds, packSizes, products, levels, pending: drafts.pending, ...(drafts.error ? { draftsError: drafts.error } : {}) };
+  return { locations, sourceIds, packSizes, ...(setup ? { setup } : {}), products, levels, pending: drafts.pending, ...(drafts.error ? { draftsError: drafts.error } : {}) };
 };

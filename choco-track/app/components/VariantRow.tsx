@@ -14,6 +14,8 @@ interface Props {
   readonly showProduct: boolean;
   readonly locations: readonly Location[];
   readonly editing: boolean;
+  /** False while setup is unfinished: cells show no low or over marks. */
+  readonly alerts?: boolean;
   readonly onSave: (targets: Targets) => Promise<InventoryResponse>;
   /** Tells the page whether this row has edits that were not saved (only while editing). */
   readonly onDirty?: (variantId: string, dirty: boolean) => void;
@@ -26,7 +28,7 @@ const draftIds = (row: ReportRow, locations: readonly Location[]): readonly stri
   ...new Set([...locations.map((l) => l.id), ...Object.keys(row.variant.targets)]),
 ];
 
-export function VariantRow({ row, productTitle, showProduct, locations, editing, onSave, onDirty, onUntracked }: Props) {
+export function VariantRow({ row, productTitle, showProduct, locations, editing, alerts = true, onSave, onDirty, onUntracked }: Props) {
   const { variant } = row;
   const ids = draftIds(row, locations);
   const [drafts, setDrafts] = useState<Drafts>(() => targetsToDrafts(variant.targets, ids));
@@ -108,7 +110,7 @@ export function VariantRow({ row, productTitle, showProduct, locations, editing,
       </th>
       {locations.map((l) => {
         const cell = row.cells[l.id];
-        if (!editing || !cell) return cell ? <ReportCell key={l.id} cell={cell} /> : <td key={l.id} />;
+        if (!editing || !cell) return cell ? <ReportCell key={l.id} cell={cell} alerts={alerts} /> : <td key={l.id} />;
         const draft = drafts[l.id] ?? { min: "", max: "" };
         const error = problem?.locationId === l.id ? problem.message : undefined;
         return (

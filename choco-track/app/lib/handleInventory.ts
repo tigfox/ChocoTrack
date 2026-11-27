@@ -1,12 +1,14 @@
+import { applySetupAction, type SetupState } from '../domain/setup';
 import { isMonitored } from '../domain/tracking';
 import type { LevelMap } from '../domain/tracking';
 import type { GraphqlClient } from '../shopify/client';
 import { friendlyMessage } from '../shopify/errors';
-import { createDraftTransfer, savePackSizes, saveSourceIds, saveVariantTargets, setProductFlag, setVariantUntracked } from '../shopify/inventoryWrites';
+import { createDraftTransfer, savePackSizes, saveSetup, saveSourceIds, saveVariantTargets, setProductFlag, setVariantUntracked } from '../shopify/inventoryWrites';
 import { loadInventoryReport, loadLevels, loadProducts, type ReportProduct } from '../shopify/trackedCatalog';
-import { parseFlagInput, parsePackSizesInput, parseSourcesInput, parseTargetsInput, parseTransferInput, parseUntrackedInput } from './inventoryInput';
+import { parseFlagInput, parsePackSizesInput, parseSetupInput, parseSourcesInput, parseTargetsInput, parseTransferInput, parseUntrackedInput } from './inventoryInput';
 import { logError } from './logError';
 import { planTransfers } from './planTransfers';
+import { setupFacts } from './setupFacts';
 
 export interface CreatedTransfer {
   readonly id: string;
@@ -23,6 +25,8 @@ export type InventoryResponse =
       readonly levels?: LevelMap;
       readonly digest?: string | null;
       readonly created?: readonly CreatedTransfer[];
+      /** The setup guide state after a `setup` change. */
+      readonly setup?: SetupState;
     }
   | { readonly ok: false; readonly message: string };
 
@@ -69,6 +73,29 @@ const savePackSizesIntent = async (client: GraphqlClient, raw: unknown): Promise
   if (!parsed.ok) return fail(parsed.error);
   await savePackSizes(client, parsed.value.packSizes);
   return { ok: true, message: 'Saved pack sizes.' };
+};
+
+const SETUP_MESSAGES = {
+  complete: 'Alerts are on.',
+  restart: 'Setup restarted. Alerts are paused until you finish it again.',
+  skipTransfers: 'Skipped. You can set up transfers later on the Settings page.',
+  dismissGuide: 'Setup guide closed.',
+} as const;
+
+/**
+ * A press of a setup guide button. Everything is decided here from fresh Shopify data, never from the browser.
+ * Restarting needs no read; every other action reads the report so an older install is not switched off by accident.
+ */
+const setupIntent = async (client: GraphqlClient, raw: unknown): Promise<InventoryResponse> => {
+  const parsed = parseSetupInput(raw);
+  if (!parsed.ok) return fail(parsed.error);
+  const { action } = parsed.value;
+  const report = action === 'restart' ? undefined : await loadInventoryReport(client);
+  const facts = report ? setupFacts(report) : { flaggedProducts: 0, monitoredVariants: 0, lowVariants: 0, sourcesSaved: false };
+  const result = applySetupAction(report?.setup, action, facts);
+  if (!result.ok) return fail(result.error);
+  await saveSetup(client, result.state);
+  return { ok: true, message: SETUP_MESSAGES[action], setup: result.state };
 };
 
 const NOTHING = 'Nothing to transfer right now.';
@@ -125,6 +152,8 @@ export const handleInventory = async (client: GraphqlClient, raw: unknown): Prom
         return await setUntracked(client, raw);
       case 'savePackSizes':
         return await savePackSizesIntent(client, raw);
+      case 'setup':
+        return await setupIntent(client, raw);
       case 'createTransfers':
         return await createTransfers(client, raw);
       default:

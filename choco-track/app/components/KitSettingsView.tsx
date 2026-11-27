@@ -8,6 +8,7 @@ import { LinkKitModal } from "./LinkKitModal";
 import type { PackSizes } from "../domain/packSizes";
 import type { VariantLabel } from "../shopify/variantLabels";
 import { PackSizeCard } from "./PackSizeCard";
+import { SetupGuideCard } from "./SetupGuideCard";
 import { SourceLocationsCard } from "./SourceLocationsCard";
 
 interface Props {
@@ -65,6 +66,7 @@ export function KitSettingsView({ workspace, sourceIds, packSizes, labels }: Pro
         </CollapsibleSection>
         <SourceLocationsCard locations={workspace.locations} sourceIds={sourceIds} />
         <PackSizeCard packSizes={packSizes} labels={labels} collections={workspace.collections} />
+        <SetupGuideCard />
         <LinkKitModal
           open={linking}
           existing={workspace.kits}

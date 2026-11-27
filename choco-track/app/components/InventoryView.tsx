@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRevalidator } from "react-router";
+import { resolveSetup, type SetupAction } from "../domain/setup";
 import { isMonitored, lowSummary, productsWithoutTargets } from "../domain/tracking";
 import type { Targets } from "../domain/targets";
 import type { Collection } from "../domain/types";
@@ -9,11 +10,13 @@ import { planTransfers } from "../lib/planTransfers";
 import { postInventory } from "../lib/postInventory";
 import { readPreferences, writePreferences } from "../lib/preferences";
 import { buildReportGroups, limitGroups } from "../lib/reportRows";
+import { setupFacts } from "../lib/setupFacts";
 import { addPending, mergeLevels, reconcileProducts, removeProduct, upsertProduct, withVariantTargets, withVariantUntracked } from "../lib/reportState";
 import { unsavedMessage, withDirty } from "../lib/unsavedRows";
 import type { InventoryReport, ReportVariant } from "../shopify/trackedCatalog";
 import { fieldChecked, fieldValue } from "../wc";
 import { AddProductsModal } from "./AddProductsModal";
+import { SetupGuide } from "./SetupGuide";
 import { InventoryTable } from "./InventoryTable";
 import { SuggestedTransfersModal } from "./SuggestedTransfersModal";
 
@@ -67,12 +70,16 @@ function LoadedInventory({ report, collections, shopHandle, refreshing, onRefres
   const [notice, setNotice] = useState<{ tone: "success" | "critical"; text: string } | undefined>();
   const [addOpen, setAddOpen] = useState(false);
   const [transfersOpen, setTransfersOpen] = useState(false);
+  const [storedSetup, setStoredSetup] = useState(report.setup);
+  const [setupBusy, setSetupBusy] = useState<SetupAction | undefined>();
+  const [setupError, setSetupError] = useState<string | undefined>();
 
   // A fresh read replaces the data, keeping what was flagged on or off a moment ago (Shopify's search lags).
   useEffect(() => {
     setProducts((prev) => reconcileProducts(report.products, prev, flagChanges));
     setLevels((prev) => mergeLevels(prev, report.levels));
     setPending(report.pending);
+    setStoredSetup(report.setup);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [report]);
 
@@ -81,13 +88,17 @@ function LoadedInventory({ report, collections, shopHandle, refreshing, onRefres
   }, []);
 
   const variants = useMemo(() => products.flatMap((p) => p.variants), [products]);
+  // One answer decides whether any alert shows: the sidebar, banners, low marks and Suggest transfers all follow it.
+  const facts = useMemo(() => setupFacts({ products, levels, pending, sourceIds: report.sourceIds }), [products, levels, pending, report.sourceIds]);
+  const setup = useMemo(() => resolveSetup(storedSetup, facts), [storedSetup, facts]);
+  const alerts = setup.alertsEnabled;
   const visibleLocations = report.locations.filter((l) => !hiddenIds.includes(l.id));
   const { groups, rowCount, hiddenUntargeted, hiddenUntracked } = buildReportGroups({
     products,
     levels,
     pending,
     locationIds: visibleLocations.map((l) => l.id),
-    filters: { search, lowOnly, showUntargeted, showUntracked },
+    filters: { search, lowOnly: lowOnly && alerts, showUntargeted, showUntracked },
   });
   const summary = lowSummary(variants.filter(isMonitored), levels, pending);
   const needTargets = productsWithoutTargets(products);
@@ -147,6 +158,20 @@ function LoadedInventory({ report, collections, shopHandle, refreshing, onRefres
     return result;
   };
 
+  const runSetup = async (action: SetupAction) => {
+    setSetupBusy(action);
+    setSetupError(undefined);
+    const result = await postInventory({ intent: "setup", action });
+    setSetupBusy(undefined);
+    if (!result.ok) return setSetupError(result.message);
+    if (result.setup) setStoredSetup(result.setup);
+  };
+
+  const openTargets = () => {
+    setShowUntargeted(true);
+    setEditing(true);
+  };
+
   const createTransfers = (route: { originId: string; destinationId: string } | undefined): Promise<InventoryResponse> =>
     postInventory({ intent: "createTransfers", key: crypto.randomUUID(), ...(route ?? {}) });
 
@@ -157,19 +182,34 @@ function LoadedInventory({ report, collections, shopHandle, refreshing, onRefres
 
   return (
     <s-page heading="Inventory" inlineSize="large">
-      <s-button slot="primary-action" variant="primary" disabled={Boolean(report.draftsError)} onClick={() => setTransfersOpen(true)}>
-        {`Suggest transfers (${plan.transfers.length})`}
-      </s-button>
+      {alerts && (
+        <s-button slot="primary-action" variant="primary" disabled={Boolean(report.draftsError)} onClick={() => setTransfersOpen(true)}>
+          {`Suggest transfers (${plan.transfers.length})`}
+        </s-button>
+      )}
       <s-button slot="secondary-actions" onClick={() => setAddOpen(true)}>Add products</s-button>
-      <s-button slot="secondary-actions" onClick={toggleEditing}>{editing ? "Done editing" : "Edit targets"}</s-button>
+      {setup.showTable && <s-button slot="secondary-actions" onClick={toggleEditing}>{editing ? "Done editing" : "Edit targets"}</s-button>}
       <s-button slot="secondary-actions" loading={refreshing} onClick={onRefresh}>Refresh</s-button>
 
       <s-stack gap="base">
         {notice && (
           <s-banner tone={notice.tone} dismissible>{notice.text}</s-banner>
         )}
-        {report.draftsError && <s-banner tone="warning" heading="Transfer suggestions are off">{report.draftsError}</s-banner>}
-        {summary.variants > 0 && (
+        {setup.showGuide && (
+          <SetupGuide
+            setup={setup}
+            facts={facts}
+            busy={setupBusy}
+            {...(setupError ? { error: setupError } : {})}
+            onAddProducts={() => setAddOpen(true)}
+            onSetTargets={openTargets}
+            onSkipTransfers={() => void runSetup("skipTransfers")}
+            onTurnOn={() => void runSetup("complete")}
+            onDismiss={() => void runSetup("dismissGuide")}
+          />
+        )}
+        {alerts && report.draftsError && <s-banner tone="warning" heading="Transfer suggestions are off">{report.draftsError}</s-banner>}
+        {alerts && summary.variants > 0 && (
           <s-banner tone="critical" heading={`${summary.variants} item${summary.variants === 1 ? " is" : "s are"} below the minimum`}>
             {summary.uncoveredVariants < summary.variants
               ? `${summary.variants - summary.uncoveredVariants} of them already have stock on the way. `
@@ -177,38 +217,36 @@ function LoadedInventory({ report, collections, shopHandle, refreshing, onRefres
             <s-button slot="secondary-actions" onClick={() => setLowOnly(true)}>Show only low</s-button>
           </s-banner>
         )}
-        {report.sourceIds.length === 0 && summary.variants > 0 && (
+        {alerts && report.sourceIds.length === 0 && summary.variants > 0 && (
           <s-banner tone="info" heading="No source locations set">
             Choose the locations that supply stock on the <s-link href="/app/settings">Settings page</s-link> to get transfer suggestions.
           </s-banner>
         )}
-        {needTargets.length > 0 && (
+        {alerts && needTargets.length > 0 && (
           <s-banner tone="warning" heading={`${needTargets.length} tracked product${needTargets.length === 1 ? " has" : "s have"} no targets yet`}>
             {needTargets.map((p) => p.title).join(", ")}
             <s-button
               slot="secondary-actions"
-              onClick={() => {
-                setShowUntargeted(true);
-                setEditing(true);
-              }}
+              onClick={openTargets}
             >
               Set targets
             </s-button>
           </s-banner>
         )}
-        {truncated.length > 0 && (
+        {alerts && truncated.length > 0 && (
           <s-banner tone="warning" heading="Some products have more variants than the report reads">
             {truncated.map((p) => p.title).join(", ")}
           </s-banner>
         )}
 
+        {setup.showTable && (
         <s-section>
           <s-stack gap="base">
             <s-grid gridTemplateColumns="2fr 1fr" gap="base">
               <s-search-field label="Search" value={search} placeholder="Product, variant or SKU" onInput={(e) => { setSearch(fieldValue(e)); setLimit(ROW_PAGE); }} />
             </s-grid>
             <s-stack direction="inline" gap="large">
-              <s-checkbox label="Low only" checked={lowOnly} onChange={(e) => setLowOnly(fieldChecked(e))} />
+              {alerts && <s-checkbox label="Low only" checked={lowOnly} onChange={(e) => setLowOnly(fieldChecked(e))} />}
               <s-checkbox
                 label={`Show variants without targets (${hiddenUntargeted})`}
                 checked={showUntargeted}
@@ -233,8 +271,9 @@ function LoadedInventory({ report, collections, shopHandle, refreshing, onRefres
             </s-stack>
           </s-stack>
         </s-section>
+        )}
 
-        {products.length === 0 ? (
+        {!setup.showTable ? null : products.length === 0 ? (
           <s-section heading="Nothing is tracked yet">
             <s-stack gap="base">
               <s-paragraph>Pick the products to watch, then set a minimum and maximum for each location.</s-paragraph>
@@ -262,7 +301,7 @@ function LoadedInventory({ report, collections, shopHandle, refreshing, onRefres
                 </s-banner>
               )}
               {editing && !confirmingDone && <s-text color="subdued">Each row saves on its own: press Save on a row before you finish.</s-text>}
-              <InventoryTable groups={limitGroups(groups, limit)} locations={visibleLocations} editing={editing} onSave={saveTargets} onDirty={setDirty} onUntracked={setUntracked} />
+              <InventoryTable groups={limitGroups(groups, limit)} locations={visibleLocations} editing={editing} alerts={alerts} onSave={saveTargets} onDirty={setDirty} onUntracked={setUntracked} />
               {rowCount > limit && (
                 <div>
                   <s-button onClick={() => setLimit((n) => n + ROW_PAGE)}>{`Show more (${rowCount - limit} left)`}</s-button>

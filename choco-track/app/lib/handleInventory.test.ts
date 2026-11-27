@@ -230,4 +230,56 @@ describe('handleInventory', () => {
     expect(out).toEqual({ ok: false, message: 'Shopify could not be reached or rejected the request. Please try again.' });
     expect(console.error).toHaveBeenCalled();
   });
+
+  describe('setup', () => {
+    const state = (over: object = {}) => ({ completed: false, transfersSkipped: false, guideDismissed: false, ...over });
+    const settings = (stored?: object) => ({
+      currentAppInstallation: { metafield: { value: JSON.stringify([W]) }, packSizes: null, ...(stored ? { setup: { value: JSON.stringify(stored) } } : {}) },
+    });
+    const writes = { 'query AppInstallationId': { currentAppInstallation: { id: 'gid://shopify/AppInstallation/1' } }, 'mutation SetMetafields': setOk };
+    const written = (client: { calls: ReadonlyArray<{ query: string; variables?: Record<string, unknown> }> }) =>
+      JSON.parse(((client.calls.find((c) => c.query.includes('SetMetafields'))?.variables?.metafields as Array<{ value: string }>)[0] as { value: string }).value);
+
+    it('turns alerts on after checking fresh data', async () => {
+      const client = routedClient(reportRoutes({ ...writes, 'query SourceLocations': settings(state()) }));
+      const out = await handleInventory(client, { intent: 'setup', action: 'complete' });
+      expect(out).toMatchObject({ ok: true, setup: state({ completed: true }) });
+      expect(written(client)).toEqual(state({ completed: true }));
+    });
+    it('refuses to turn alerts on when nothing has targets, and writes nothing', async () => {
+      const noTargets = { 'query TrackedProducts': { nodes: [productNode()] } };
+      const client = routedClient(reportRoutes({ ...writes, ...noTargets, 'query SourceLocations': settings(state()) }));
+      const out = await handleInventory(client, { intent: 'setup', action: 'complete' });
+      expect(out).toMatchObject({ ok: false, message: expect.stringMatching(/product/i) });
+      expect(client.calls.some((c) => c.query.includes('SetMetafields'))).toBe(false);
+    });
+    it('restarts without reading the report', async () => {
+      const client = routedClient(writes);
+      const out = await handleInventory(client, { intent: 'setup', action: 'restart' });
+      expect(out).toMatchObject({ ok: true, setup: state() });
+      expect(written(client)).toEqual(state());
+      expect(client.calls.some((c) => c.query.includes('FlaggedProducts'))).toBe(false);
+    });
+    it('skips the transfers step', async () => {
+      const client = routedClient(reportRoutes({ ...writes, 'query SourceLocations': settings(state()) }));
+      await expect(handleInventory(client, { intent: 'setup', action: 'skipTransfers' })).resolves.toMatchObject({ ok: true, setup: state({ transfersSkipped: true }) });
+    });
+    it('does not turn alerts off for an install that predates the guide when a step is skipped', async () => {
+      const client = routedClient(reportRoutes({ ...writes, 'query SourceLocations': settings() }));
+      const out = await handleInventory(client, { intent: 'setup', action: 'skipTransfers' });
+      expect(out).toMatchObject({ ok: true, setup: { completed: true, transfersSkipped: true } });
+    });
+    it('closes the guide only when setup is complete', async () => {
+      const done = routedClient(reportRoutes({ ...writes, 'query SourceLocations': settings(state({ completed: true })) }));
+      await expect(handleInventory(done, { intent: 'setup', action: 'dismissGuide' })).resolves.toMatchObject({ ok: true, setup: state({ completed: true, guideDismissed: true }) });
+      const early = routedClient(reportRoutes({ ...writes, 'query SourceLocations': settings(state()) }));
+      await expect(handleInventory(early, { intent: 'setup', action: 'dismissGuide' })).resolves.toMatchObject({ ok: false });
+      expect(early.calls.some((c) => c.query.includes('SetMetafields'))).toBe(false);
+    });
+    it('rejects an unknown action before calling Shopify', async () => {
+      const client = routedClient({});
+      await expect(handleInventory(client, { intent: 'setup', action: 'drop' })).resolves.toEqual({ ok: false, message: 'Invalid request.' });
+      expect(client.calls).toHaveLength(0);
+    });
+  });
 });

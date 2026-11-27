@@ -3,7 +3,8 @@ import { numericId, sanitize } from './catalog';
 import type { GraphqlClient } from './client';
 import { assertNoUserErrors, ShopifyApiError, type UserError } from './errors';
 import { serializePackSizes, type PackSizes } from '../domain/packSizes';
-import { PACK_SIZES_METAFIELD, SOURCES_METAFIELD, TARGETS_METAFIELD, TRACKED_METAFIELD, TRANSFER_TAG, UNTRACKED_METAFIELD } from './trackedCatalog';
+import { serializeSetup, type SetupState } from '../domain/setup';
+import { PACK_SIZES_METAFIELD, SETUP_METAFIELD, SOURCES_METAFIELD, TARGETS_METAFIELD, TRACKED_METAFIELD, TRANSFER_TAG, UNTRACKED_METAFIELD } from './trackedCatalog';
 
 const SET_METAFIELDS = `#graphql
   mutation SetMetafields($metafields: [MetafieldsSetInput!]!) {
@@ -130,6 +131,19 @@ export const saveSourceIds = async (client: GraphqlClient, ids: readonly string[
     ...SOURCES_METAFIELD,
     type: 'json',
     value: JSON.stringify(ids),
+  });
+};
+
+/** Saves the setup guide state with the app installation (no database). */
+export const saveSetup = async (client: GraphqlClient, state: SetupState): Promise<void> => {
+  const { currentAppInstallation } = await client<{ currentAppInstallation: { id: string } }>(
+    '#graphql\n query AppInstallationId { currentAppInstallation { id } }',
+  );
+  await setMetafield(client, 'Save setup', {
+    ownerId: currentAppInstallation.id,
+    ...SETUP_METAFIELD,
+    type: 'json',
+    value: serializeSetup(state),
   });
 };
 

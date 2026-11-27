@@ -1,4 +1,4 @@
-import { parseFlagInput, parsePackSizesInput, parseSourcesInput, parseUntrackedInput, parseTargetsInput, parseTransferInput } from './inventoryInput';
+import { parseFlagInput, parsePackSizesInput, parseSetupInput, parseSourcesInput, parseUntrackedInput, parseTargetsInput, parseTransferInput } from './inventoryInput';
 
 const P = 'gid://shopify/Product/1';
 const V = 'gid://shopify/ProductVariant/2';
@@ -109,4 +109,14 @@ describe('parseUntrackedInput', () => {
     ['a text flag', { variantId, untracked: 'true' }],
     ['no flag', { variantId }],
   ])('rejects %s', (_n, raw) => expect(parseUntrackedInput(raw)).toEqual({ ok: false, error: 'Invalid request.' }));
+});
+
+describe('parseSetupInput', () => {
+  it.each(['complete', 'restart', 'skipTransfers', 'dismissGuide'])('accepts %s', (action) => {
+    expect(parseSetupInput({ intent: 'setup', action })).toEqual({ ok: true, value: { action } });
+  });
+  it.each([['no action', {}], ['unknown action', { action: 'drop' }], ['not a string', { action: 1 }], ['not an object', 'complete'], ['null', null]])(
+    'rejects %s',
+    (_n, raw) => expect(parseSetupInput(raw)).toEqual({ ok: false, error: 'Invalid request.' }),
+  );
 });

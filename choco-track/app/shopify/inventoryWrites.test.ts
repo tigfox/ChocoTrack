@@ -4,6 +4,7 @@ import {
   createDraftTransfer,
   savePackSizes,
   setVariantUntracked,
+  saveSetup,
   saveSourceIds,
   saveVariantTargets,
   searchProductsForFlag,
@@ -125,6 +126,24 @@ describe('saveSourceIds', () => {
     await saveSourceIds(client, [W, M]);
     expect(client.calls[1]?.variables).toEqual({
       metafields: [{ ownerId: 'gid://shopify/AppInstallation/1', namespace: '$app:inventory', key: 'sources', type: 'json', value: JSON.stringify([W, M]) }],
+    });
+  });
+});
+
+describe('saveSetup', () => {
+  it('stores the setup state on the app installation', async () => {
+    const client = fakeClient({ currentAppInstallation: { id: 'gid://shopify/AppInstallation/1' } }, setOk());
+    await saveSetup(client, { completed: true, transfersSkipped: false, guideDismissed: false });
+    expect(client.calls[1]?.variables).toEqual({
+      metafields: [
+        {
+          ownerId: 'gid://shopify/AppInstallation/1',
+          namespace: '$app:inventory',
+          key: 'setup',
+          type: 'json',
+          value: JSON.stringify({ completed: true, transfersSkipped: false, guideDismissed: false }),
+        },
+      ],
     });
   });
 });

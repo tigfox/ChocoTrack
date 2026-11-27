@@ -1,4 +1,5 @@
 import { MAX_PACK_GROUPS, MAX_PACK_VARIANTS, validatePackSize, type PackGroup, type PackSizes } from '../domain/packSizes';
+import { SETUP_ACTIONS, type SetupAction } from '../domain/setup';
 import { setTarget, validateTarget, type Targets } from '../domain/targets';
 import { isLocationGid, isProductGid, isVariantGid } from './shopifyIds';
 
@@ -65,6 +66,17 @@ export const parseUntrackedInput = (raw: unknown): Parsed<UntrackedInput> => {
   const body = record(raw);
   if (!body || !isVariantGid(body.variantId) || typeof body.untracked !== 'boolean') return fail();
   return { ok: true, value: { variantId: body.variantId, untracked: body.untracked } };
+};
+
+export interface SetupInput {
+  readonly action: SetupAction;
+}
+
+/** A press of one of the setup guide's buttons. */
+export const parseSetupInput = (raw: unknown): Parsed<SetupInput> => {
+  const action = record(raw)?.action;
+  const known = SETUP_ACTIONS.find((a) => a === action);
+  return known ? { ok: true, value: { action: known } } : fail();
 };
 
 export const parseSourcesInput = (raw: unknown): Parsed<{ sourceIds: readonly string[] }> => {

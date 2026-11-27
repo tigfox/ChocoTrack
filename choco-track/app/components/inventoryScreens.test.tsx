@@ -67,6 +67,19 @@ describe("InventoryTable", () => {
     expect(html).toContain("+20 incoming");
     expect(html).toContain("Over max"); // mini at the warehouse: 450 > 300
   });
+  it("shows no alert while setup is unfinished: no low or over badges, no red or blue marks, counts and targets stay", () => {
+    const html = renderToStaticMarkup(<InventoryTable groups={groups()} locations={locations} editing={false} alerts={false} onSave={noop} />);
+    expect(html).not.toContain("Low");
+    expect(html).not.toContain("Over max");
+    expect(html).not.toContain("inv-cell inv-low");
+    expect(html).not.toContain("inv-cell inv-over");
+    expect(html).toContain("min 10 / max 30");
+    expect(html).toContain("+20 incoming");
+  });
+  it("shows alerts by default", () => {
+    const html = renderToStaticMarkup(<InventoryTable groups={groups()} locations={locations} editing={false} onSave={noop} />);
+    expect(html).toContain("inv-cell inv-low");
+  });
   it("shows drafts that are on the way", () => {
     const html = renderToStaticMarkup(<InventoryTable groups={groups({ mini: { [M]: 8 } })} locations={locations} editing={false} onSave={noop} />);
     expect(html).toContain("+8 in draft");

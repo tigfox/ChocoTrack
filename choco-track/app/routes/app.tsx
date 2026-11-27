@@ -3,7 +3,8 @@ import { Outlet, useLoaderData, useRouteError } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 
-import { useLowCount } from "../hooks/useLowCount";
+import { useLowStatus } from "../hooks/useLowStatus";
+import { navLabel } from "../lib/navLabel";
 import { authenticate } from "../shopify.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -15,12 +16,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 export default function App() {
   const { apiKey } = useLoaderData<typeof loader>();
-  const lowCount = useLowCount();
+  const lowStatus = useLowStatus();
 
   return (
     <AppProvider apiKey={apiKey}>
       <s-app-nav>
-        <s-link href="/app/inventory">{lowCount ? `Inventory (${lowCount})` : "Inventory"}</s-link>
+        <s-link href="/app/inventory">{navLabel(lowStatus)}</s-link>
         <s-link href="/app/assemble">Assemble</s-link>
         <s-link href="/app/disassemble">Disassemble</s-link>
         <s-link href="/app/settings">Settings</s-link>
