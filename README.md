@@ -43,7 +43,7 @@ It expects locations named Warehouse, Factory, Market Store and Cafe (the live s
 
 ```bash
 npm run typecheck && npm run lint && npm run build
-npm run test:coverage                                # unit and render tests, 80% gate (846 tests, 99% lines)
+npm run test:coverage                                # unit and render tests, 80% gate (868 tests, 99% lines)
 LIVE_STORE=<store>.myshopify.com npm run test:live  # real queries + an assemble/disassemble round trip (net zero)
 ```
 

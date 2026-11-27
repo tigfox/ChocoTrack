@@ -542,7 +542,7 @@ describe('Inventory: setup guide', () => {
   const progress = () => app().evaluate(() => /(\d) of 4 steps completed/.exec(document.querySelector('s-section[heading="Setup guide"]')?.textContent ?? '')?.[1]);
   const restart = async () => {
     await open('settings');
-    await app().locator('summary', { hasText: 'Setup guide' }).evaluate((el) => (el.parentElement.open = true));
+    await app().locator('summary', { hasText: 'Setup guide and reset' }).evaluate((el) => (el.parentElement.open = true));
     await click(app().locator('s-button', { hasText: 'Pause alerts and restart setup' }));
     await click(app().locator('s-button', { hasText: 'Pause alerts now' }));
     await waitFor(() => /Setup restarted/.test(document.body.innerText));
@@ -620,5 +620,37 @@ describe('Inventory: setup guide', () => {
       return res.json();
     });
     assert.deepEqual(bad, { ok: false, message: 'Invalid request.' });
+  });
+});
+
+describe('Settings: reset all settings', () => {
+  // Opens the confirmation and cancels. The reset itself clears the dev store's targets, so it is not part of the suite.
+  it('asks before resetting, names the consequences, and Cancel changes nothing', async () => {
+    await open('inventory');
+    const snapshot = async () => ({ tables: await app().locator('table').count(), guides: await app().locator('s-section[heading="Setup guide"]').count() });
+    const before = await snapshot();
+
+    await open('settings');
+    await app().locator('summary', { hasText: 'Setup guide and reset' }).evaluate((el) => (el.parentElement.open = true));
+    const modal = app().locator('s-modal[heading="Reset all settings?"]');
+    await modal.waitFor({ state: 'attached', timeout: 20_000 });
+    const modalText = await modal.evaluate((el) => el.textContent);
+    assert.match(modalText, /tracked products/);
+    assert.match(modalText, /minimum and maximum targets/);
+    assert.match(modalText, /transfer sources and pack sizes/);
+    assert.match(modalText, /not changed/);
+    assert.match(modalText, /This action cannot be undone\./);
+
+    // The trigger sits outside the modal (no slot); the primary button inside it is the one that resets.
+    await app().locator('s-button:not([slot])', { hasText: /^Reset all settings$/ }).first().evaluate((el) => el.click());
+    await page.waitForTimeout(2_500);
+    const cancel = modal.locator('s-button[slot="secondary-actions"]', { hasText: 'Cancel' }).first();
+    assert.equal(await cancel.isVisible(), true, 'the confirmation is really on screen, not just in the page');
+    await cancel.evaluate((el) => el.click());
+    await page.waitForTimeout(800);
+    assert.doesNotMatch(await text(), /Settings reset\./);
+
+    await open('inventory');
+    assert.deepEqual(await snapshot(), before, 'nothing changed after Cancel');
   });
 });

@@ -1,4 +1,4 @@
-import { parseFlagInput, parsePackSizesInput, parseSetupInput, parseSourcesInput, parseUntrackedInput, parseTargetsInput, parseTransferInput } from './inventoryInput';
+import { parseFlagInput, parsePackSizesInput, parseResetInput, parseSetupInput, parseSourcesInput, parseUntrackedInput, parseTargetsInput, parseTransferInput } from './inventoryInput';
 
 const P = 'gid://shopify/Product/1';
 const V = 'gid://shopify/ProductVariant/2';
@@ -118,5 +118,15 @@ describe('parseSetupInput', () => {
   it.each([['no action', {}], ['unknown action', { action: 'drop' }], ['not a string', { action: 1 }], ['not an object', 'complete'], ['null', null]])(
     'rejects %s',
     (_n, raw) => expect(parseSetupInput(raw)).toEqual({ ok: false, error: 'Invalid request.' }),
+  );
+});
+
+describe('parseResetInput', () => {
+  it('needs an explicit confirmation', () => {
+    expect(parseResetInput({ intent: 'resetSettings', confirm: true })).toEqual({ ok: true, value: {} });
+  });
+  it.each([['none', {}], ['false', { confirm: false }], ['a string', { confirm: 'true' }], ['not an object', 'x'], ['null', null]])(
+    'rejects %s',
+    (_n, raw) => expect(parseResetInput(raw)).toEqual({ ok: false, error: 'Invalid request.' }),
   );
 });

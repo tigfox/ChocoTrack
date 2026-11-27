@@ -287,4 +287,29 @@ describe('handleInventory', () => {
       expect(client.calls).toHaveLength(0);
     });
   });
+
+  describe('resetSettings', () => {
+    const resetRoutes = {
+      'query AllProductIds': { products: { nodes: [{ id: P }], pageInfo: { hasNextPage: false, endCursor: null } } },
+      'query TrackedProducts': { nodes: [productNode({ [W]: { min: 1, max: 2 } })] },
+      'mutation DeleteMetafields': { metafieldsDelete: { deletedMetafields: [], userErrors: [] } },
+      'query AppInstallationId': { currentAppInstallation: { id: 'gid://shopify/AppInstallation/1' } },
+      'mutation SetMetafields': setOk,
+    };
+    it('resets everything and reports what was cleared', async () => {
+      const out = await handleInventory(routedClient(resetRoutes), { intent: 'resetSettings', confirm: true });
+      expect(out).toMatchObject({ ok: true, setup: { completed: false, transfersSkipped: false, guideDismissed: false } });
+      expect(out.message).toMatch(/1 product/);
+      expect(out.message).toMatch(/1 variant/);
+    });
+    it('refuses without confirmation and changes nothing', async () => {
+      const client = routedClient(resetRoutes);
+      await expect(handleInventory(client, { intent: 'resetSettings' })).resolves.toEqual({ ok: false, message: 'Invalid request.' });
+      expect(client.calls).toHaveLength(0);
+    });
+    it('explains a Shopify failure', async () => {
+      const out = await handleInventory(routedClient({ ...resetRoutes, 'mutation DeleteMetafields': new ShopifyApiError('Throttled') }), { intent: 'resetSettings', confirm: true });
+      expect(out.ok).toBe(false);
+    });
+  });
 });

@@ -183,7 +183,7 @@ Human test checklist step 6 changes: quantities are whole packs of each variant'
 
 ### Change 4: setup guide, and no alerts until it is finished (built 2026-11-27, waiting for review and human testing)
 
-A four-step **Setup guide** on the Inventory homepage (products, targets, optional transfers, **Turn on alerts**), built to Shopify's setup guide pattern. Until alerts are turned on, nothing alerts: no sidebar count (it reads `Inventory (setup)`), red banner, Low or Over max marks, Low only filter, Suggest transfers or nudges, and the table is hidden until a product is flagged. Stored as `$app:inventory/setup`; a store already in use is set up automatically (decided once at the first look). **Settings > Setup guide** restarts it. Plan, as-built notes and the human checklist: [`inventory_onboarding_plan.md`](inventory_onboarding_plan.md).
+A four-step **Setup guide** on the Inventory homepage (products, targets, optional transfers, **Turn on alerts**), built to Shopify's setup guide pattern. Until alerts are turned on, nothing alerts: no sidebar count (it reads `Inventory (setup)`), red banner, Low or Over max marks, Low only filter, Suggest transfers or nudges, and the table is hidden until a product is flagged. Stored as `$app:inventory/setup`; a store already in use is set up automatically (decided once at the first look). **Settings > Setup guide** restarts it. Settings > **Setup guide and reset** also has **Reset all settings** (behind a confirmation) to start over as a new install. Plan, as-built notes and the human checklist: [`inventory_onboarding_plan.md`](inventory_onboarding_plan.md).
 
 ### Settings page layout
 

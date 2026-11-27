@@ -8,7 +8,7 @@ import { LinkKitModal } from "./LinkKitModal";
 import type { PackSizes } from "../domain/packSizes";
 import type { VariantLabel } from "../shopify/variantLabels";
 import { PackSizeCard } from "./PackSizeCard";
-import { SetupGuideCard } from "./SetupGuideCard";
+import { SetupSettingsCard } from "./SetupSettingsCard";
 import { SourceLocationsCard } from "./SourceLocationsCard";
 
 interface Props {
@@ -16,9 +16,17 @@ interface Props {
   readonly sourceIds: readonly string[];
   readonly packSizes: PackSizes;
   readonly labels: Readonly<Record<string, VariantLabel>>;
+  /** Reloads the saved settings after a reset (the route supplies it). */
+  readonly onSettingsReset?: () => Promise<void> | void;
 }
 
-export function KitSettingsView({ workspace, sourceIds, packSizes, labels }: Props) {
+export function KitSettingsView({ workspace, sourceIds, packSizes, labels, onSettingsReset }: Props) {
+  // The source and pack size cards keep their own edits, so they start again from the cleared settings after a reset.
+  const [settingsVersion, setSettingsVersion] = useState(0);
+  const settingsReset = async () => {
+    await onSettingsReset?.();
+    setSettingsVersion((v) => v + 1);
+  };
   const [creating, setCreating] = useState(false);
   const [linking, setLinking] = useState(false);
   const { busy, response, submit, reset } = useSettingsAction();
@@ -64,9 +72,9 @@ export function KitSettingsView({ workspace, sourceIds, packSizes, labels }: Pro
             </s-stack>
           </s-stack>
         </CollapsibleSection>
-        <SourceLocationsCard locations={workspace.locations} sourceIds={sourceIds} />
-        <PackSizeCard packSizes={packSizes} labels={labels} collections={workspace.collections} />
-        <SetupGuideCard />
+        <SourceLocationsCard key={`sources-${settingsVersion}`} locations={workspace.locations} sourceIds={sourceIds} />
+        <PackSizeCard key={`packs-${settingsVersion}`} packSizes={packSizes} labels={labels} collections={workspace.collections} />
+        <SetupSettingsCard onReset={settingsReset} />
         <LinkKitModal
           open={linking}
           existing={workspace.kits}

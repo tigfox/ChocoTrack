@@ -1,10 +1,9 @@
 import { useState } from "react";
 import { notifyAlertsChanged } from "../lib/alertsChanged";
 import { postInventory } from "../lib/postInventory";
-import { CollapsibleSection } from "./CollapsibleSection";
 
 /** Restarts the Inventory setup guide. Alerts pause until it is finished again; also how the guide is tested. */
-export function SetupGuideCard({ initialConfirming = false }: { readonly initialConfirming?: boolean }) {
+export function RestartSetup({ initialConfirming = false }: { readonly initialConfirming?: boolean }) {
   const [confirming, setConfirming] = useState(initialConfirming);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | undefined>();
@@ -20,8 +19,8 @@ export function SetupGuideCard({ initialConfirming = false }: { readonly initial
   };
 
   return (
-    <CollapsibleSection heading="Setup guide">
-      <s-stack gap="base">
+    <s-stack gap="base">
+      <s-heading>Restart the setup guide</s-heading>
         <s-paragraph color="subdued">
           Run the Inventory setup guide again. Alerts stay off until you finish it and turn them on. Your products, targets and settings are kept.
         </s-paragraph>
@@ -41,7 +40,6 @@ export function SetupGuideCard({ initialConfirming = false }: { readonly initial
             <s-button onClick={() => setConfirming(true)}>Pause alerts and restart setup</s-button>
           </div>
         )}
-      </s-stack>
-    </CollapsibleSection>
+    </s-stack>
   );
 }

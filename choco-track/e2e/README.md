@@ -12,3 +12,6 @@ Click-through tests of the embedded screens. They attach to a Chrome you start a
 They run against the dev store and are net-zero on stock (assemble, then disassemble). Not run in CI.
 
 The run also records the browser's uncaught exceptions and console errors and prints them grouped at the end. A JavaScript error (uncaught, TypeError, ReferenceError, RangeError) fails the run; network noise (the admin's old dev-tunnel WebSocket, and the connection resets the "Dropped connection" tests cause on purpose) is only reported.
+
+**After a reset:** the Settings page has a **Reset all settings** button (inside "Setup guide and reset") that clears every flag, target, Untracked switch, transfer source and pack size and restarts the setup guide, for testing onboarding with new users. Most of this suite (Inventory edits, Add products, untracked variants, the setup guide test) needs tracked products with targets, so those tests fail on a reset store until products are flagged again. The "reset all settings" test only opens the confirmation and cancels.
+

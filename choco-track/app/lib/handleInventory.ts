@@ -1,11 +1,12 @@
-import { applySetupAction, type SetupState } from '../domain/setup';
+import { applySetupAction, DEFAULT_SETUP, type SetupState } from '../domain/setup';
 import { isMonitored } from '../domain/tracking';
 import type { LevelMap } from '../domain/tracking';
 import type { GraphqlClient } from '../shopify/client';
 import { friendlyMessage } from '../shopify/errors';
 import { createDraftTransfer, savePackSizes, saveSetup, saveSourceIds, saveVariantTargets, setProductFlag, setVariantUntracked } from '../shopify/inventoryWrites';
+import { resetAllSettings } from '../shopify/resetSettings';
 import { loadInventoryReport, loadLevels, loadProducts, loadTransferSettings, type ReportProduct } from '../shopify/trackedCatalog';
-import { parseFlagInput, parsePackSizesInput, parseSetupInput, parseSourcesInput, parseTargetsInput, parseTransferInput, parseUntrackedInput } from './inventoryInput';
+import { parseFlagInput, parsePackSizesInput, parseResetInput, parseSetupInput, parseSourcesInput, parseTargetsInput, parseTransferInput, parseUntrackedInput } from './inventoryInput';
 import { logError } from './logError';
 import { ensureSetupState } from './ensureSetup';
 import { planTransfers } from './planTransfers';
@@ -110,6 +111,25 @@ const setupIntent = async (client: GraphqlClient, raw: unknown): Promise<Invento
   return { ok: true, message: SETUP_MESSAGES[action], setup: result.state };
 };
 
+const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
+
+/** Clears every ChocoTrack setting for the store; the person has confirmed in the UI and the body says so. */
+const resetSettings = async (client: GraphqlClient, raw: unknown): Promise<InventoryResponse> => {
+  const parsed = parseResetInput(raw);
+  if (!parsed.ok) return fail(parsed.error);
+  const done = await resetAllSettings(client);
+  const partial = done.moreProducts
+    ? ' The store has more products than one reset covers: press Reset again to clear the rest.'
+    : done.truncatedProducts > 0
+      ? ` ${plural(done.truncatedProducts, 'product has', 'products have')} more variants than were read, so some of their targets may remain.`
+      : '';
+  return {
+    ok: true,
+    message: `Settings reset. Cleared tracking for ${plural(done.products, 'product', 'products')} and targets or switches on ${plural(done.variants, 'variant', 'variants')}. The setup guide starts again.${partial}`,
+    setup: DEFAULT_SETUP,
+  };
+};
+
 const NOTHING = 'Nothing to transfer right now.';
 
 /** Never trusts quantities from the browser: the suggestions are recomputed here from fresh Shopify data. */
@@ -166,6 +186,8 @@ export const handleInventory = async (client: GraphqlClient, raw: unknown): Prom
         return await savePackSizesIntent(client, raw);
       case 'setup':
         return await setupIntent(client, raw);
+      case 'resetSettings':
+        return await resetSettings(client, raw);
       case 'createTransfers':
         return await createTransfers(client, raw);
       default:

@@ -54,7 +54,7 @@ export interface ResolvedSetup {
 
 export const SETUP_STEP_COUNT = 4;
 
-const DEFAULT_STATE: SetupState = { completed: false, transfersSkipped: false, guideDismissed: false };
+export const DEFAULT_SETUP: SetupState = { completed: false, transfersSkipped: false, guideDismissed: false };
 /** An install that predates the guide: set up, and no guide to nag about. */
 const LEGACY_STATE: SetupState = { completed: true, transfersSkipped: false, guideDismissed: true };
 
@@ -76,7 +76,7 @@ export const serializeSetup = (state: SetupState): string =>
 
 export const resolveSetup = (stored: StoredSetup, facts: SetupFacts): ResolvedSetup => {
   const legacy = stored === undefined && facts.monitoredVariants > 0;
-  const state = stored ?? (legacy ? LEGACY_STATE : DEFAULT_STATE);
+  const state = stored ?? (legacy ? LEGACY_STATE : DEFAULT_SETUP);
   const complete = state.completed;
   const hasProducts = facts.flaggedProducts > 0;
   const hasTargets = facts.monitoredVariants > 0;
@@ -114,7 +114,7 @@ export const applySetupAction = (stored: StoredSetup, action: SetupAction, facts
         ? { ok: true, state: { ...current.state, completed: true } }
         : { ok: false, error: 'Choose a product to watch and set a minimum and maximum before turning on alerts.' };
     case 'restart':
-      return { ok: true, state: DEFAULT_STATE };
+      return { ok: true, state: DEFAULT_SETUP };
     case 'skipTransfers':
       return { ok: true, state: { ...current.state, transfersSkipped: true } };
     case 'dismissGuide':

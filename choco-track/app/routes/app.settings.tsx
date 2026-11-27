@@ -1,5 +1,5 @@
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { useLoaderData } from "react-router";
+import { useLoaderData, useRevalidator } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { KitSettingsView } from "../components/KitSettingsView";
 import { fromAdmin } from "../shopify/client";
@@ -23,7 +23,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 export default function Settings() {
   const { sourceIds, packSizes, labels, ...workspace } = useLoaderData<typeof loader>();
-  return <KitSettingsView workspace={workspace} sourceIds={sourceIds} packSizes={packSizes} labels={labels} />;
+  const { revalidate } = useRevalidator();
+  return <KitSettingsView workspace={workspace} sourceIds={sourceIds} packSizes={packSizes} labels={labels} onSettingsReset={() => revalidate()} />;
 }
 
 export const headers: HeadersFunction = (headersArgs) => boundary.headers(headersArgs);

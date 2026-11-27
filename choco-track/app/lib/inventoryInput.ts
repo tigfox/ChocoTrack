@@ -79,6 +79,10 @@ export const parseSetupInput = (raw: unknown): Parsed<SetupInput> => {
   return known ? { ok: true, value: { action: known } } : fail();
 };
 
+/** Resetting clears settings for the whole store, so the request must say so explicitly. */
+export const parseResetInput = (raw: unknown): Parsed<Record<string, never>> =>
+  record(raw)?.confirm === true ? { ok: true, value: {} } : fail();
+
 export const parseSourcesInput = (raw: unknown): Parsed<{ sourceIds: readonly string[] }> => {
   const ids = record(raw)?.sourceIds;
   if (!Array.isArray(ids) || ids.length > MAX_SOURCES || !ids.every(isLocationGid) || new Set(ids).size !== ids.length) return fail();
