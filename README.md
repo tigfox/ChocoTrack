@@ -17,10 +17,15 @@ A Shopify embedded admin app with two parts. Shopify holds all records; the app 
 Prerequisites: Node 22.12+, [Shopify CLI](https://shopify.dev/docs/api/shopify-cli) 5+, a Partner/Dev Dashboard account and a development store.
 
 ```bash
+./start.sh             # from the repo root: starts the DEV app safely (see below)
+
+# or by hand:
 cd choco-track
 npm install
 shopify app dev --config shopify.app.toml   # always name the dev config: the CLI can otherwise attach to the production app (see choco-track/e2e/README.md)
 ```
+
+`start.sh` always names the dev config (`shopify.app.toml`), refuses to run if that config is not the dev app, and removes the dev preview when you press Ctrl+C. `./start.sh check` only verifies the setup; `./start.sh clean` removes a leftover preview. While it runs, open **ChocoTrack** (not *ChocoTrack Production*) in the dev store's admin; when it is stopped the dev app shows `https://example.com`, which is normal. Production only gets tested, reviewed code.
 
 Screens: **Inventory** (`/app/inventory`, the home page), **Assemble** (`/app/assemble`), **Disassemble** (`/app/disassemble`) and **Settings** (`/app/settings`: kits, categories and transfer source locations). Products are flagged for the Inventory report with the `choco_track.tracked` product metafield and given targets in the `choco_track.targets` variant metafield (both are set from the app). A kit is a variant whose product is tagged `choco-track-kit` and which has an integer metafield `choco_track.kit_size` (and optionally `choco_track.category`, a collection). Settings can mark an existing product as a kit (its inventory must be tracked) or create a new one. Mini bar flavors are variants of their category product (`Mini Bars - Rare`); a variant's `choco_track.display_name` metafield is the name shown in the app.
 

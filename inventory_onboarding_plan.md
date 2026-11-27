@@ -1,6 +1,6 @@
 # Plan: inventory alert onboarding, and no alerts until setup is done
 
-Written 2026-11-27 from early store-team feedback. **Status (2026-11-27): built on branch `feat/inventory-setup-guide`, tested in the browser against the dev store, waiting for the PR review and human testing.** See "As built" and "Human test checklist" at the end. Fits into `inventory_tracker.md` (the Inventory section) and uses the same process as the rest of the app: tests first, then code, then review, one PR, deployed by the owner.
+Written 2026-11-27 from early store-team feedback. **Status (2026-11-27): built on branch `feat/inventory-setup-guide` (PR #31), tested in the browser on the dev app, waiting for PR review. Not merged or deployed: production gets only tested, reviewed code, and user testing happens on the dev app (`./start.sh`) after further development. The dev store is reset so the guide starts from nothing.** See "As built" and "Human test checklist" at the end. Fits into `inventory_tracker.md` (the Inventory section) and uses the same process as the rest of the app: tests first, then code, then review, one PR, deployed by the owner.
 
 ## The two requirements
 
